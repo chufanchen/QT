@@ -8,7 +8,7 @@ import d4rl
 
 
 datasets = []
-names = [ 'walker2d-medium-replay-v2']
+names = [ 'walker2d-medium-replay-v2', 'halfcheetah-medium-expert-v2']
 
 
 for env_name in names:
