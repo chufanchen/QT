@@ -341,7 +341,8 @@ def experiment(
         scale=scale,
         sar=variant['sar'],
         rtg_no_q=variant['rtg_no_q'],
-        infer_no_q=variant['infer_no_q']
+        infer_no_q=variant['infer_no_q'],
+        stochastic_policy=variant['stochastic_policy']
     )
     critic = Critic(
         state_dim, act_dim, hidden_dim=variant['embed_dim']
@@ -410,6 +411,7 @@ if __name__ == '__main__':
     parser.add_argument('--seed', type=int, default=123)
     parser.add_argument('--env', type=str, default='hopper')
     parser.add_argument('--dataset', type=str, default='medium')  # medium, medium-replay, medium-expert, expert
+    
     parser.add_argument('--mode', type=str, default='normal')  # normal for standard setting, delayed for sparse
     parser.add_argument('--K', type=int, default=20)
     parser.add_argument('--pct_traj', type=float, default=1.)
@@ -447,6 +449,8 @@ if __name__ == '__main__':
     parser.add_argument("--test_scale", type=float, default=None)
     parser.add_argument("--rtg_no_q", action='store_true', default=False)
     parser.add_argument("--infer_no_q", action='store_true', default=False)
+    parser.add_argument("--stochastic_policy", action='store_true', default=False)
+    
     
     args = parser.parse_args()
 

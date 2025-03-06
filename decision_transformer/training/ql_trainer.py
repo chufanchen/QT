@@ -93,6 +93,24 @@ class Trainer:
     def step_ema(self):
         if self.step > self.step_start_ema and self.step % self.update_ema_every == 0:
             self.ema.update_model_average(self.ema_model, self.actor)
+            
+    def action_loss_fn(
+            a_hat_dist,
+            a,
+            attention_mask,
+            entropy_reg,
+        ):
+            # a_hat is a SquashedNormal Distribution
+            log_likelihood = a_hat_dist.log_likelihood(a)[attention_mask > 0].mean()
+
+            entropy = a_hat_dist.entropy().mean()
+            loss = -(log_likelihood + entropy_reg * entropy)
+
+            return (
+                loss,
+                -log_likelihood,
+                entropy,
+            )
 
     def train_iteration(self, num_steps, logger, iter_num=0, log_writer=None):
 
@@ -259,9 +277,23 @@ class Trainer:
         state_preds, action_preds, reward_preds = self.actor.forward(
             states, actions, rewards, action_target, rtg[:,:-1], timesteps, attention_mask=attention_mask,
         )
-
-        action_preds_ = action_preds.reshape(-1, action_dim)[attention_mask.reshape(-1) > 0]
-        action_target_ = action_target.reshape(-1, action_dim)[attention_mask.reshape(-1) > 0]
+        
+        if self.actor.stochastic_policy:
+            # the return action is a SquashNormal distribution
+            # action_preds_ = action_preds.rsample() # for reparameterization trick (mean + std * N(0,1))
+            action_preds_ = action_preds.sample()
+            # NLL in Online DT
+            action_loss = self.action_loss_fn(
+                action_preds, # a_hat_dist
+                action_target, # (batch_size, context_len, action_dim)
+                attention_mask, 
+                self.actor.temperature().detach() # no gradient taken here
+                )
+            action_preds_ = action_preds.sample().reshape(-1, action_dim)[attention_mask.reshape(-1) > 0]
+        else:
+            action_target_ = action_target.reshape(-1, action_dim)[attention_mask.reshape(-1) > 0]
+            action_preds_ = action_preds.reshape(-1, action_dim)[attention_mask.reshape(-1) > 0]
+            action_loss = F.mse_loss(action_preds_, action_target_)
         state_preds = state_preds[:, :-1]
         state_target = states[:, 1:]
         states_loss = ((state_preds - state_target) ** 2)[attention_mask[:, :-1]>0].mean()
@@ -271,7 +303,7 @@ class Trainer:
             rewards_loss = F.mse_loss(reward_preds, reward_target)
         else:
             rewards_loss = 0
-        bc_loss = F.mse_loss(action_preds_, action_target_) + states_loss + rewards_loss
+        bc_loss = action_loss + states_loss + rewards_loss
 
         actor_states = states.reshape(-1, state_dim)[attention_mask.reshape(-1) > 0]
         q1_new_action, q2_new_action = self.critic(actor_states, action_preds_)
