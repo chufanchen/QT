@@ -70,9 +70,9 @@ class GaussianBCModel(TrajectoryModel):
     def forward(self, states, actions, rewards, attention_mask=None, target_return=None):
 
         states = states[:,-self.max_length:].reshape(states.shape[0], -1)  # concat states
-        actions_dist = self.model(states)
+        action_dist = self.model(states)
 
-        return None, actions_dist, None
+        return None, action_dist, None
 
     def get_action(self, states, actions, rewards, **kwargs):
         states = states.reshape(1, -1, self.state_dim)
@@ -83,5 +83,5 @@ class GaussianBCModel(TrajectoryModel):
         states = states.to(dtype=torch.float32)
         _, action_dist, _ = self.forward(states, None, None, **kwargs)
         # the return action is a SquashNormal distribution
-        action = action_dist.sample().sample().reshape(1, 1, self.act_dim)
-        return action
+        action = action_dist.sample().reshape(1, 1, self.act_dim)
+        return action[0,-1]

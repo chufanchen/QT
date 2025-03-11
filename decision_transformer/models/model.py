@@ -183,6 +183,10 @@ class SquashedNormal(pyd.transformed_distribution.TransformedDistribution):
         for tr in self.transforms:
             mu = tr(mu)
         return mu
+    
+    @property
+    def mode(self):
+        return self.mean
 
     def entropy(self, N=1):
         # sample from the distribution and then compute
