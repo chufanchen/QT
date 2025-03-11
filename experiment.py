@@ -20,7 +20,8 @@ from decision_transformer.evaluation.evaluate_episodes import (
 )
 from decision_transformer.models.decision_transformer import DecisionTransformer
 from decision_transformer.models.mlp_bc import GaussianBCModel, MLPBCModel
-from decision_transformer.models.ql_DT import Critic, QDecisionTransformer
+from decision_transformer.models.model import Critic
+from decision_transformer.models.ql_DT import QDecisionTransformer
 from decision_transformer.training.act_trainer import ActTrainer, StochasticActTrainer
 from decision_transformer.training.ql_trainer import QDTTrainer
 from decision_transformer.training.seq_trainer import SequenceTrainer
@@ -494,6 +495,7 @@ def experiment(
             loss_fn=lambda s_hat, a_hat, r_hat, s, a, r: torch.mean((a_hat - a) ** 2),
             eval_fns=[eval_episodes(env_targets)],
             max_q_backup=variant["max_q_backup"],
+            alpha=variant["alpha"],
             eta=variant["eta"],
             eta2=variant["eta2"],
             ema_decay=0.995,
@@ -619,6 +621,7 @@ if __name__ == "__main__":
 
     parser.add_argument("--discount", default=0.99, type=float)
     parser.add_argument("--tau", default=0.005, type=float)
+    parser.add_argument("--alpha", default=1.0, type=float)
     parser.add_argument("--eta", default=1.0, type=float)
     parser.add_argument("--eta2", default=1.0, type=float)
     parser.add_argument("--lambda", default=1.0, type=float)

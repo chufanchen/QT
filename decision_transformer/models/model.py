@@ -232,3 +232,39 @@ class DiagGaussianActor(nn.Module):
         log_std = log_std_min + 0.5 * (log_std_max - log_std_min) * (log_std + 1.0)
         std = log_std.exp()
         return SquashedNormal(mu, std)
+
+
+class Critic(nn.Module):
+    def __init__(self, state_dim, action_dim, hidden_dim=256):
+        super(Critic, self).__init__()
+        self.q1_model = nn.Sequential(
+            nn.Linear(state_dim + action_dim, hidden_dim),
+            nn.Mish(),
+            nn.Linear(hidden_dim, hidden_dim),
+            nn.Mish(),
+            nn.Linear(hidden_dim, hidden_dim),
+            nn.Mish(),
+            nn.Linear(hidden_dim, 1),
+        )
+
+        self.q2_model = nn.Sequential(
+            nn.Linear(state_dim + action_dim, hidden_dim),
+            nn.Mish(),
+            nn.Linear(hidden_dim, hidden_dim),
+            nn.Mish(),
+            nn.Linear(hidden_dim, hidden_dim),
+            nn.Mish(),
+            nn.Linear(hidden_dim, 1),
+        )
+
+    def forward(self, state, action):
+        x = torch.cat([state, action], dim=-1)
+        return self.q1_model(x), self.q2_model(x)
+
+    def q1(self, state, action):
+        x = torch.cat([state, action], dim=-1)
+        return self.q1_model(x)
+
+    def q_min(self, state, action):
+        q1, q2 = self.forward(state, action)
+        return torch.min(q1, q2)
