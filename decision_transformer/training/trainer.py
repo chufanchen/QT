@@ -19,7 +19,7 @@ class Trainer:
 
         self.start_time = time.time()
 
-    def train_iteration(self, num_steps, logger, iter_num=0):
+    def train_iteration(self, num_steps, iter_num=0, print_logs=False):
 
         train_losses = []
         logs = dict()
@@ -50,16 +50,21 @@ class Trainer:
 
         for k in self.diagnostics:
             logs[k] = self.diagnostics[k]
-
-        logger.info('=' * 80)
-        logger.info(f'Iteration {iter_num}')
-        best_ret = -10000
-        for k, v in logs.items():
-            if 'return_mean' in k:
-                best_ret = max(best_ret, float(v))
-            logger.info(f'{k}: {v}')
+            
+        if print_logs:
+            print('=' * 80)
+            print(f'Iteration {iter_num}')
+            best_ret = -10000
+            best_nor_ret = -10000
+            for k, v in logs.items():
+                if 'return_mean' in k:
+                    best_ret = max(best_ret, float(v))
+                if 'normalized_score' in k:
+                    best_nor_ret = max(best_nor_ret, float(v))
+                print(f'{k}: {v}')
 
         logs['Best_return_mean'] = best_ret
+        logs['Best_normalized_score'] = best_nor_ret
         return logs
 
     def train_step(self):

@@ -146,7 +146,7 @@ class DiagGaussianActor(nn.Module):
         std = log_std.exp()
         return SquashedNormal(mu, std)
         
-class DecisionTransformer(TrajectoryModel):
+class QDecisionTransformer(TrajectoryModel):
     """
     This model uses GPT to model (Return_1, state_1, action_1, Return_2, state_2, ...)
     """

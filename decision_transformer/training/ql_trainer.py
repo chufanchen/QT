@@ -6,6 +6,7 @@ import time
 import copy
 from tqdm import tqdm, trange
 from torch.optim.lr_scheduler import CosineAnnealingLR
+from decision_transformer.training.trainer import Trainer
 
 
 class EMA():
@@ -27,7 +28,7 @@ class EMA():
         return old * self.beta + (1 - self.beta) * new
 
 
-class Trainer:
+class QDTTrainer(Trainer):
 
     def __init__(self, 
                 model, 
@@ -112,7 +113,7 @@ class Trainer:
                 entropy,
             )
 
-    def train_iteration(self, num_steps, logger, iter_num=0, log_writer=None):
+    def train_iteration(self, num_steps, logger, iter_num=0):
 
         logs = dict()
 
@@ -120,26 +121,21 @@ class Trainer:
 
         self.actor.train()
         self.critic.train()
-        loss_metric = {
-            'bc_loss': [],
-            'ql_loss': [],
-            'actor_loss': [],
-            'critic_loss': [],
-            'target_q_mean': [],
-        }
+        bc_losses = []
+        ql_losses = []
+        actor_losses = []
+        critic_losses = []
+        
         for _ in trange(num_steps):
-            loss_metric = self.train_step(log_writer, loss_metric)
+            loss_metric = self.train_step()
+            bc_losses.append(loss_metric['bc_loss'])
+            ql_losses.append(loss_metric['ql_loss'])
+            actor_losses.append(loss_metric['actor_loss'])
+            critic_losses.append(loss_metric['critic_loss']) 
         
         if self.lr_decay: 
             self.actor_lr_scheduler.step()
             self.critic_lr_scheduler.step()
-
-        logger.record_tabular('BC Loss', np.mean(loss_metric['bc_loss']))
-        logger.record_tabular('QL Loss', np.mean(loss_metric['ql_loss']))
-        logger.record_tabular('Actor Loss', np.mean(loss_metric['actor_loss']))
-        logger.record_tabular('Critic Loss', np.mean(loss_metric['critic_loss']))
-        logger.record_tabular('Target Q Mean', np.mean(loss_metric['target_q_mean']))
-        logger.dump_tabular()
 
         logs['time/training'] = time.time() - train_start
 
@@ -155,6 +151,14 @@ class Trainer:
 
         logs['time/total'] = time.time() - self.start_time
         logs['time/evaluation'] = time.time() - eval_start
+        logs['training/bc_loss_mean'] = np.mean(bc_losses)
+        logs['training/bc_loss_std'] = np.std(bc_losses)
+        logs['training/ql_loss_mean'] = np.mean(ql_losses)
+        logs['training/ql_loss_std'] = np.std(ql_losses)
+        logs['training/actor_loss_mean'] = np.mean(actor_losses)
+        logs['training/actor_loss_std'] = np.std(actor_losses)
+        logs['training/critic_loss_mean'] = np.mean(critic_losses)
+        logs['training/critic_loss_std'] = np.std(critic_losses)
 
         for k in self.diagnostics:
             logs[k] = self.diagnostics[k]
@@ -168,10 +172,9 @@ class Trainer:
                 best_ret = max(best_ret, float(v))
             if 'normalized_score' in k:
                 best_nor_ret = max(best_nor_ret, float(v))
-            logger.record_tabular(k, float(v))
-        logger.record_tabular('Current actor learning rate', self.actor_optimizer.param_groups[0]['lr'])
-        logger.record_tabular('Current critic learning rate', self.critic_optimizer.param_groups[0]['lr'])
-        logger.dump_tabular()
+            logger.info(k, float(v))
+        logger.info('Current actor learning rate', self.actor_optimizer.param_groups[0]['lr'])
+        logger.info('Current critic learning rate', self.critic_optimizer.param_groups[0]['lr'])
 
         logs['Best_return_mean'] = best_ret
         logs['Best_normalized_score'] = best_nor_ret
@@ -180,7 +183,7 @@ class Trainer:
     def scale_up_eta(self, lambda_):
         self.eta2 = self.eta2 / lambda_
 
-    def train_step(self, log_writer=None, loss_metric={}):
+    def train_step(self):
         '''
             Train the model for one step
             states: (batch_size, max_len, state_dim)
@@ -332,19 +335,10 @@ class Trainer:
         with torch.no_grad():
             self.diagnostics['training/action_error'] = torch.mean((action_preds-action_target)**2).detach().cpu().item()
 
-        if log_writer is not None:
-            if self.grad_norm > 0:
-                log_writer.add_scalar('Actor Grad Norm', actor_grad_norms.max().item(), self.step)
-                log_writer.add_scalar('Critic Grad Norm', critic_grad_norms.max().item(), self.step)
-            log_writer.add_scalar('BC Loss', bc_loss.item(), self.step)
-            log_writer.add_scalar('QL Loss', q_loss.item(), self.step)
-            log_writer.add_scalar('Critic Loss', critic_loss.item(), self.step)
-            log_writer.add_scalar('Target_Q Mean', target_q.mean().item(), self.step)
-
-        loss_metric['bc_loss'].append(bc_loss.item())
-        loss_metric['ql_loss'].append(q_loss.item())
-        loss_metric['critic_loss'].append(critic_loss.item())
-        loss_metric['actor_loss'].append(actor_loss.item())
-        loss_metric['target_q_mean'].append(target_q.mean().item())
+        loss_metric = dict()
+        loss_metric['bc_loss'] = bc_loss.item()
+        loss_metric['ql_loss']= q_loss.item()
+        loss_metric['critic_loss'] = critic_loss.item()
+        loss_metric['actor_loss'] = actor_loss.item()
 
         return loss_metric

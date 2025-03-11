@@ -147,3 +147,5 @@ save/
 
 # vscode 
 .vscode/
+
+wandb/

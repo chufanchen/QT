@@ -1,6 +1,13 @@
 #!/bin/bash
 
 python experiment.py --seed 123 \
+    --env halfcheetah --dataset expert   \
+    --eta 0.4 --grad_norm 15.0 \
+    --exp_name bc --save_path ./save/    \
+    --max_iters 500 --num_steps_per_iter 10000 --lr_decay \
+    --early_stop --k_rewards --use_discount  \
+
+python experiment.py --seed 123 \
     --env halfcheetah --dataset medium-expert   \
     --eta 0.4 --grad_norm 15.0 \
     --exp_name qt --save_path ./save/    \
