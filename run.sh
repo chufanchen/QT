@@ -5,7 +5,14 @@ python experiment.py --seed 123 \
     --eta 0.4 --grad_norm 15.0 \
     --exp_name bc --save_path ./save/    \
     --max_iters 500 --num_steps_per_iter 10000 --lr_decay \
-    --early_stop --k_rewards --use_discount  \
+    --early_stop --k_rewards --use_discount --mode_type bc \
+
+python experiment.py --seed 123 \
+    --env halfcheetah --dataset expert   \
+    --eta 0.4 --grad_norm 15.0 \
+    --exp_name bc --save_path ./save/    \
+    --max_iters 500 --num_steps_per_iter 10000 --lr_decay \
+    --early_stop --k_rewards --use_discount --model_type bc --stochastic_policy \
 
 python experiment.py --seed 123 \
     --env halfcheetah --dataset medium-expert   \

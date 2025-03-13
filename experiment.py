@@ -11,7 +11,6 @@ import gym
 import numpy as np
 import torch
 import wandb
-from mjrl.utils.gym_env import GymEnv
 from torch.utils.tensorboard import SummaryWriter
 
 from decision_transformer.evaluation.evaluate_episodes import (
@@ -51,6 +50,24 @@ class TrainerConfig:
 def save_checkpoint(state, name):
     filename = name
     torch.save(state, filename)
+
+def load_model(path, model, critic=None):
+    """
+    Load saved model and critic state dictionaries from a checkpoint file
+    
+    Args:
+        path: Path to the checkpoint file
+        model: The actor model to load state into
+        critic: The critic model to load state into (optional)
+    
+    Returns:
+        epoch: The epoch number when the model was saved
+    """
+    checkpoint = torch.load(path, map_location='cpu')
+    model.load_state_dict(checkpoint["actor"])
+    if critic is not None and checkpoint["critic"] is not None:
+        critic.load_state_dict(checkpoint["critic"])
+    return checkpoint["epoch"]
 
 
 def discount_cumsum(x, gamma):
@@ -463,6 +480,15 @@ def experiment(
     if model_type == "qdt":
         critic = Critic(state_dim, act_dim, hidden_dim=variant["embed_dim"])
         critic = critic.to(device=device)
+        if variant["policy_penalty"] or variant["value_penalty"]:
+            prior = GaussianBCModel(
+                state_dim=state_dim,
+                act_dim=act_dim,
+                hidden_size=variant["embed_dim"],
+                n_layer=variant["n_layer"],
+            )
+            load_model(variant["behavior_ckpt_file"], prior)
+            prior = prior.to(device=device)
     else:
         warmup_steps = variant["warmup_steps"]
         optimizer = torch.optim.AdamW(
@@ -510,6 +536,10 @@ def experiment(
             scale=scale,
             k_rewards=variant["k_rewards"],
             use_discount=variant["use_discount"],
+            prior=prior,
+            policy_penalty=variant["policy_penalty"],
+            value_penalty=variant["value_penalty"],
+            action_spec=env.action_space
         )
     elif model_type == "bc":
         if variant["stochastic_policy"]:
@@ -638,7 +668,11 @@ if __name__ == "__main__":
     parser.add_argument("--test_scale", type=float, default=None)
     parser.add_argument("--rtg_no_q", action="store_true", default=False)
     parser.add_argument("--infer_no_q", action="store_true", default=False)
+    
     parser.add_argument("--stochastic_policy", action="store_true", default=False)
+    parser.add_argument("--behavior_ckpt_file", type=str, default=None)
+    parser.add_argument("--policy_penalty", action="store_true", default=False)
+    parser.add_argument("--value_penalty", action="store_true", default=False)
 
     args = parser.parse_args()
 

@@ -8,7 +8,7 @@ import torch.nn.functional as F
 from torch.optim.lr_scheduler import CosineAnnealingLR
 from tqdm import tqdm, trange
 
-from decision_transformer.models.divergences import KL, MMD, FDivergence, W
+from decision_transformer.models.divergences import clip_by_eps, KL, MMD, FDivergence, W
 from decision_transformer.training.trainer import Trainer
 
 
@@ -65,6 +65,8 @@ class QDTTrainer(Trainer):
         divergence_name="kl",
         n_div_samples=4,
         action_spec=None,
+        policy_penalty=True,
+        value_penalty=False,
     ):
         self.actor = model
         self.actor_optimizer = torch.optim.Adam(
@@ -106,6 +108,8 @@ class QDTTrainer(Trainer):
         self.use_discount = use_discount
         self.n_div_samples = n_div_samples
         self.prior = prior
+        self.policy_penalty = policy_penalty
+        self.value_penalty = value_penalty
         self.divergence_name = divergence_name
         if self.divergence_name == "kl":
             self.divergence = KL
@@ -126,6 +130,7 @@ class QDTTrainer(Trainer):
             self.ema.update_model_average(self.ema_model, self.actor)
 
     def action_loss_fn(
+        self,
         a_hat_dist,
         a,
         attention_mask,
@@ -136,14 +141,18 @@ class QDTTrainer(Trainer):
 
         entropy = a_hat_dist.entropy().mean()
         loss = -(log_likelihood + entropy_reg * entropy)
+        # if torch.isnan(loss):
+        #     print("NAN detected in action loss")
+        #     import pdb
 
+        #     pdb.set_trace()
         return (
             loss,
             -log_likelihood,
             entropy,
         )
 
-    def train_iteration(self, num_steps, logger, iter_num=0):
+    def train_iteration(self, num_steps, iter_num=0, print_logs=False):
         logs = dict()
 
         train_start = time.time()
@@ -191,22 +200,25 @@ class QDTTrainer(Trainer):
         for k in self.diagnostics:
             logs[k] = self.diagnostics[k]
 
-        logger.log("=" * 80)
-        logger.log(f"Iteration {iter_num}")
-        best_ret = -10000
-        best_nor_ret = -10000
-        for k, v in logs.items():
-            if "return_mean" in k:
-                best_ret = max(best_ret, float(v))
-            if "normalized_score" in k:
-                best_nor_ret = max(best_nor_ret, float(v))
-            logger.info(k, float(v))
-        logger.info(
-            "Current actor learning rate", self.actor_optimizer.param_groups[0]["lr"]
-        )
-        logger.info(
-            "Current critic learning rate", self.critic_optimizer.param_groups[0]["lr"]
-        )
+        if print_logs:
+            print("=" * 80)
+            print(f"Iteration {iter_num}")
+            best_ret = -10000
+            best_nor_ret = -10000
+            for k, v in logs.items():
+                if "return_mean" in k:
+                    best_ret = max(best_ret, float(v))
+                if "normalized_score" in k:
+                    best_nor_ret = max(best_nor_ret, float(v))
+                print(k, float(v))
+            print(
+                "Current actor learning rate",
+                self.actor_optimizer.param_groups[0]["lr"],
+            )
+            print(
+                "Current critic learning rate",
+                self.critic_optimizer.param_groups[0]["lr"],
+            )
 
         logs["Best_return_mean"] = best_ret
         logs["Best_normalized_score"] = best_nor_ret
@@ -283,7 +295,11 @@ class QDTTrainer(Trainer):
         if self.k_rewards:
             if self.max_q_backup:
                 critic_next_states = states_rpt[:, -1]
-                next_action = next_action[:, -1]
+                next_action = (
+                    next_action.sample()[:, -1]
+                    if self.actor.stochastic_policy
+                    else next_action[:, -1]
+                )
                 target_q1, target_q2 = self.critic_target(
                     critic_next_states, next_action
                 )
@@ -295,7 +311,11 @@ class QDTTrainer(Trainer):
                 )[0]
             else:
                 critic_next_states = states[:, -1]
-                next_action = next_action[:, -1]
+                next_action = (
+                    next_action.sample()[:, -1]
+                    if self.actor.stochastic_policy
+                    else next_action[:, -1]
+                )
                 target_q1, target_q2 = self.critic_target(
                     critic_next_states, next_action
                 )
@@ -343,13 +363,19 @@ class QDTTrainer(Trainer):
         else:
             if self.max_q_backup:
                 target_q1, target_q2 = self.critic_target(
-                    states_rpt, next_action
+                    states_rpt,
+                    next_action.sample()
+                    if self.actor.stochastic_policy
+                    else next_action,
                 )  # [B*repeat, T, 1]
                 target_q1 = target_q1.view(batch_size, repeat_num, T, 1).max(dim=1)[0]
                 target_q2 = target_q2.view(batch_size, repeat_num, T, 1).max(dim=1)[0]
             else:
                 target_q1, target_q2 = self.critic_target(
-                    states, next_action
+                    states,
+                    next_action.sample()
+                    if self.actor.stochastic_policy
+                    else next_action,
                 )  # [B, T, 1]
             target_q = torch.min(target_q1, target_q2)  # [B, T, 1]
             target_q = rewards[:, :-1] + self.discount * target_q[:, 1:]
@@ -372,7 +398,7 @@ class QDTTrainer(Trainer):
                 self.critic.parameters(), max_norm=self.grad_norm, norm_type=2
             )
         self.critic_optimizer.step()
-
+        # torch.autograd.set_detect_anomaly(True, check_nan=True)
         """Policy Training"""
         state_preds, action_preds, reward_preds = self.actor.forward(
             states,
@@ -383,25 +409,25 @@ class QDTTrainer(Trainer):
             timesteps,
             attention_mask=attention_mask,
         )
-
+        action_target_ = action_target.reshape(-1, action_dim)[
+            attention_mask.reshape(-1) > 0
+        ]
         if self.actor.stochastic_policy:
+            action_dist = action_preds
             # the return action is a SquashNormal distribution
             # action_preds_ = action_preds.rsample() # for reparameterization trick (mean + std * N(0,1))
-            action_preds_ = action_preds.sample()
+            # action_preds_ = action_preds.sample()
             # NLL in Online DT
-            action_loss = self.action_loss_fn(
-                action_preds,  # a_hat_dist
-                action_target,  # (batch_size, context_len, action_dim)
+            action_loss, nll, entropy = self.action_loss_fn(
+                action_dist,  # a_hat_dist
+                clip_by_eps(action_target, self.action_spec, 1e-6),  # (batch_size, context_len, action_dim)
                 attention_mask,
                 self.actor.temperature().detach(),  # no gradient taken here
             )
-            action_preds_ = action_preds.sample().reshape(-1, action_dim)[
+            action_preds_ = action_dist.sample().reshape(-1, action_dim)[
                 attention_mask.reshape(-1) > 0
             ]
         else:
-            action_target_ = action_target.reshape(-1, action_dim)[
-                attention_mask.reshape(-1) > 0
-            ]
             action_preds_ = action_preds.reshape(-1, action_dim)[
                 attention_mask.reshape(-1) > 0
             ]
@@ -431,13 +457,35 @@ class QDTTrainer(Trainer):
 
         actor_loss = self.eta2 * bc_loss + self.eta * q_loss
         if self.divergence is not None:
-            div_estimate = self.divergence.primal_estimate(
-                actor_states,
-                self.actor,
-                self.prior,
-                self.n_div_samples,
-                self.action_spec,
+            # action_dist = self.actor.forward(
+            #     states,
+            #     actions,
+            #     rewards,
+            #     action_target,
+            #     rtg[:, :-1],
+            #     timesteps,
+            #     attention_mask=attention_mask,
+            # )
+            _, prior_dist, _ = self.prior.forward(states, _, _)
+
+            apn = action_dist.rsample((self.n_div_samples,))
+            apn_logp = action_dist.log_prob(apn)
+            # abn = prior_dist.sample_n(self.n_div_samples)
+            # abn_logb = prior_dist.log_prob(apn)
+            apn_logb = prior_dist.log_prob(
+                clip_by_eps(apn[:, :, -1], self.action_spec, 1e-6)
             )
+            # abn_logp = action_dist.log_prob(clip_by_eps(abn, self.action_spec, 1e-6))
+
+            # # override sample
+            # div_estimate = self.divergence.primal_estimate(
+            #     action_dist,
+            #     prior_dist,
+            #     self.n_div_samples,
+            #     self.action_spec,
+            # )
+            div_estimate = torch.mean(apn_logp[:, :, -1] - apn_logb)
+            # print(div_estimate)
             actor_loss -= self.alpha * div_estimate
 
         self.actor_optimizer.zero_grad()
@@ -462,7 +510,7 @@ class QDTTrainer(Trainer):
 
         with torch.no_grad():
             self.diagnostics["training/action_error"] = (
-                torch.mean((action_preds - action_target) ** 2).detach().cpu().item()
+                torch.mean((action_preds_ - action_target_) ** 2).detach().cpu().item()
             )
 
         loss_metric = dict()

@@ -14,7 +14,7 @@ def soft_relu(x):
 
 
 def clip_by_eps(x, spec, eps=0.0):
-    return torch.clamp(x, min=spec.minimum + eps, max=spec.maximum - eps)
+    return torch.clamp(x, min=torch.tensor(spec.low).to(x.device) + eps, max=torch.tensor(spec.high).to(x.device) - eps)
 
 
 def gradient_penalty(s, a_p, a_b, c_fn, gamma=5.0):
@@ -50,7 +50,7 @@ class Divergence(object):
             s, a_p, a_b, c_fn
         )
 
-    def primal_estimate(self, s, p_fn, b_fn, n_samples, action_spec=None):
+    def primal_estimate(self, p_fn, b_fn, n_samples, action_spec=None):
         raise NotImplementedError
 
 
@@ -65,12 +65,12 @@ class FDivergence(Divergence):
     def _dual_estimate_with_logits(self, logits_p, logits_b):
         raise NotImplementedError
 
-    def primal_estimate(self, s, p_fn, b_fn, n_samples, action_spec=None):
-        _, apn, apn_logp = p_fn.sample_n(s, n_samples)
-        _, abn, abn_logb = b_fn.sample_n(s, n_samples)
+    def primal_estimate(self, p_fn, b_fn, n_samples, action_spec=None):
+        _, apn, apn_logp = p_fn.sample_n(n_samples)
+        _, abn, abn_logb = b_fn.sample_n(n_samples)
         # Clip actions here to avoid numerical issues.
-        apn_logb = b_fn.log_prob(s, clip_by_eps(apn, action_spec, CLIP_EPS))
-        abn_logp = p_fn.log_prob(s, clip_by_eps(abn, action_spec, CLIP_EPS))
+        apn_logb = b_fn.log_prob(clip_by_eps(apn, action_spec, CLIP_EPS))
+        abn_logp = p_fn.log_prob(clip_by_eps(abn, action_spec, CLIP_EPS))
         return self._primal_estimate_with_densities(
             apn_logp, apn_logb, abn_logp, abn_logb
         )
@@ -140,8 +140,8 @@ class MMD(Divergence):
     """MMD."""
 
     def primal_estimate(
-        self, s, p_fn, b_fn, n_samples, kernel=laplacian_kernel, action_spec=None
+        self, p_fn, b_fn, n_samples, kernel=laplacian_kernel, action_spec=None
     ):
-        apn = p_fn.sample_n(s, n_samples)[1]
-        abn = b_fn.sample_n(s, n_samples)[1]
+        apn = p_fn.sample_n(n_samples)[1]
+        abn = b_fn.sample_n(n_samples)[1]
         return mmd(apn, abn, kernel)
