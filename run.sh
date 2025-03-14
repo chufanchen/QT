@@ -1,20 +1,43 @@
 #!/bin/bash
+uv run experiment.py --seed 123 \
+    --env halfcheetah --dataset medium-expert   \
+    --eta 0.4 --grad_norm 15.0 \
+    --exp_name bc --save_path ./save/    \
+    --max_iters 500 --num_steps_per_iter 10000 --lr_decay \
+    --early_stop --k_rewards --use_discount --model_type qdt -w true, --policy_penalty --stochastic_policy \
+    --behavior_ckpt_file ./save/bc-halfcheetah-expert-123-250313-110202/epoch_9.pth \
 
-python experiment.py --seed 123 \
+uv run experiment.py --seed 123 \
+    --env halfcheetah --dataset medium-expert   \
+    --eta 0.4 --grad_norm 15.0 \
+    --exp_name bc --save_path ./save/    \
+    --max_iters 500 --num_steps_per_iter 10000 --lr_decay \
+    --early_stop --k_rewards --use_discount --model_type bc -w true --batch_size 64 \
+    --n_layer 3 --embed_dim 128 --learning_rate 1e-4 --num_eval_episodes 100 --stochastic_policy \
+
+uv run experiment.py --seed 123 \
+    --env halfcheetah --dataset medium-expert   \
+    --eta 0.4 --grad_norm 15.0 \
+    --exp_name bc --save_path ./save/    \
+    --max_iters 500 --num_steps_per_iter 10000 --lr_decay \
+    --early_stop --k_rewards --use_discount --model_type bc -w true --batch_size 64 \
+    --n_layer 3 --embed_dim 128 --learning_rate 1e-4 --num_eval_episodes 100 \
+
+proxychains uv run experiment.py --seed 123 \
+    --env halfcheetah --dataset medium-expert   \
+    --eta 0.4 --grad_norm 15.0 \
+    --exp_name bc --save_path ./save/    \
+    --max_iters 500 --num_steps_per_iter 10000 --lr_decay \
+    --early_stop --k_rewards --use_discount --model_type bc -w true \
+
+proxychains uv run experiment.py --seed 123 \
     --env halfcheetah --dataset expert   \
     --eta 0.4 --grad_norm 15.0 \
     --exp_name bc --save_path ./save/    \
     --max_iters 500 --num_steps_per_iter 10000 --lr_decay \
-    --early_stop --k_rewards --use_discount --mode_type bc \
+    --early_stop --k_rewards --use_discount --model_type bc --stochastic_policy -w true \
 
-python experiment.py --seed 123 \
-    --env halfcheetah --dataset expert   \
-    --eta 0.4 --grad_norm 15.0 \
-    --exp_name bc --save_path ./save/    \
-    --max_iters 500 --num_steps_per_iter 10000 --lr_decay \
-    --early_stop --k_rewards --use_discount --model_type bc --stochastic_policy \
-
-python experiment.py --seed 123 \
+uv run experiment.py --seed 123 \
     --env halfcheetah --dataset medium-expert   \
     --eta 0.4 --grad_norm 15.0 \
     --exp_name qt --save_path ./save/    \

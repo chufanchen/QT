@@ -11,7 +11,7 @@ import gym
 import numpy as np
 import torch
 import wandb
-from torch.utils.tensorboard import SummaryWriter
+# from torch.utils.tensorboard import SummaryWriter
 
 from decision_transformer.evaluation.evaluate_episodes import (
     evaluate_episode,
@@ -25,7 +25,7 @@ from decision_transformer.training.act_trainer import ActTrainer, StochasticActT
 from decision_transformer.training.ql_trainer import QDTTrainer
 from decision_transformer.training.seq_trainer import SequenceTrainer
 
-
+from tqdm import tqdm, trange
 class TrainerConfig:
     # optimization parameters
     max_epochs = 10
@@ -359,7 +359,7 @@ def experiment(
     def eval_episodes(target_rew):
         def fn(model, critic=None):
             returns, lengths = [], []
-            for _ in range(num_eval_episodes):
+            for _ in trange(num_eval_episodes):
                 with torch.no_grad():
                     if model_type == "dt":
                         ret, length = evaluate_episode_rtg(
@@ -471,6 +471,7 @@ def experiment(
                 max_length=K,
                 hidden_size=variant["embed_dim"],
                 n_layer=variant["n_layer"],
+                dropout=0.0 # TODO: REMOVE after debug
             )
     else:
         raise NotImplementedError

@@ -490,7 +490,6 @@ class QDTTrainer(Trainer):
             actor_loss += self.alpha * div_estimate
 
         self.actor_optimizer.zero_grad()
-        print(actor_loss)
         actor_loss.backward()
         if self.grad_norm > 0:
             actor_grad_norms = nn.utils.clip_grad_norm_(
