@@ -457,7 +457,7 @@ class QDTTrainer(Trainer):
             q_loss = -q2_new_action.mean() / q1_new_action.abs().mean().detach()
 
         actor_loss = self.eta2 * bc_loss + self.eta * q_loss
-        if self.divergence is not None:
+        if self.divergence is not None and self.policy_penalty:
             # action_dist = self.actor.forward(
             #     states,
             #     actions,

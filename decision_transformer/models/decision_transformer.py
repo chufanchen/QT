@@ -26,6 +26,7 @@ class DecisionTransformer(TrajectoryModel):
         max_length=None,
         max_ep_len=4096,
         action_tanh=True,
+        embed_type="normal",
         **kwargs,
     ):
         super().__init__(state_dim, act_dim, max_length=max_length)
@@ -37,6 +38,7 @@ class DecisionTransformer(TrajectoryModel):
             **kwargs,
         )
         self.config = config
+        self.embed_type = embed_type
 
         # note: the only difference between this GPT2Model and the default Huggingface version
         # is that the positional embeddings are removed (since we'll add those ourselves)
@@ -90,7 +92,7 @@ class DecisionTransformer(TrajectoryModel):
 
         device = state_embeddings.device
 
-        if self.config.embed_type == "gcn":
+        if self.embed_type == "gcn":
             # GCN embedding
             edge_index = [
                 torch.tensor([[0, 0, 1], [1, 2, 2]], dtype=torch.long)

@@ -1,27 +1,39 @@
 #!/bin/bash
+
+# QT + policy regularization
 uv run experiment.py --seed 123 \
     --env halfcheetah --dataset medium-expert   \
     --eta 0.4 --grad_norm 15.0 \
-    --exp_name bc --save_path ./save/    \
+    --exp_name brqt --save_path ./save/    \
     --max_iters 500 --num_steps_per_iter 10000 --lr_decay \
     --early_stop --k_rewards --use_discount --model_type qdt -w true, --policy_penalty --stochastic_policy \
     --behavior_ckpt_file ./save/bc-halfcheetah-expert-123-250313-110202/epoch_9.pth \
 
+# bc with stochastic policy
 uv run experiment.py --seed 123 \
     --env halfcheetah --dataset medium-expert   \
     --eta 0.4 --grad_norm 15.0 \
-    --exp_name bc --save_path ./save/    \
+    --exp_name bc_stochastic --save_path ./save/    \
     --max_iters 500 --num_steps_per_iter 10000 --lr_decay \
     --early_stop --k_rewards --use_discount --model_type bc -w true --batch_size 64 \
     --n_layer 3 --embed_dim 128 --learning_rate 1e-4 --num_eval_episodes 100 --stochastic_policy \
 
+# bc with deterministic policy
 uv run experiment.py --seed 123 \
     --env halfcheetah --dataset medium-expert   \
     --eta 0.4 --grad_norm 15.0 \
-    --exp_name bc --save_path ./save/    \
+    --exp_name bc_deterministic --save_path ./save/    \
     --max_iters 500 --num_steps_per_iter 10000 --lr_decay \
     --early_stop --k_rewards --use_discount --model_type bc -w true --batch_size 64 \
     --n_layer 3 --embed_dim 128 --learning_rate 1e-4 --num_eval_episodes 100 \
+
+# QT
+uv run experiment.py --seed 123 \
+    --env halfcheetah --dataset medium-expert   \
+    --eta 0.4 --grad_norm 15.0 \
+    --exp_name qt --save_path ./save/    \
+    --max_iters 10 --num_steps_per_iter 10000 --lr_decay \
+    --k_rewards --use_discount --model_type qdt -w true \
 
 proxychains uv run experiment.py --seed 123 \
     --env halfcheetah --dataset medium-expert   \

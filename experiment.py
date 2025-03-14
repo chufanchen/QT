@@ -477,7 +477,7 @@ def experiment(
         raise NotImplementedError
 
     model = model.to(device=device)
-
+    prior = None
     if model_type == "qdt":
         critic = Critic(state_dim, act_dim, hidden_dim=variant["embed_dim"])
         critic = critic.to(device=device)
