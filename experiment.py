@@ -16,6 +16,7 @@ import wandb
 from decision_transformer.evaluation.evaluate_episodes import (
     evaluate_episode,
     evaluate_episode_rtg,
+    evaluate_episode_rtg_v1
 )
 from decision_transformer.models.decision_transformer import DecisionTransformer
 from decision_transformer.models.mlp_bc import GaussianBCModel, MLPBCModel
@@ -26,6 +27,8 @@ from decision_transformer.training.ql_trainer import QDTTrainer
 from decision_transformer.training.seq_trainer import SequenceTrainer
 
 from tqdm import tqdm, trange
+
+
 class TrainerConfig:
     # optimization parameters
     max_epochs = 10
@@ -51,19 +54,20 @@ def save_checkpoint(state, name):
     filename = name
     torch.save(state, filename)
 
+
 def load_model(path, model, critic=None):
     """
     Load saved model and critic state dictionaries from a checkpoint file
-    
+
     Args:
         path: Path to the checkpoint file
         model: The actor model to load state into
         critic: The critic model to load state into (optional)
-    
+
     Returns:
         epoch: The epoch number when the model was saved
     """
-    checkpoint = torch.load(path, map_location='cpu')
+    checkpoint = torch.load(path, map_location="cpu")
     model.load_state_dict(checkpoint["actor"])
     if critic is not None and checkpoint["critic"] is not None:
         critic.load_state_dict(checkpoint["critic"])
@@ -362,16 +366,14 @@ def experiment(
             for _ in trange(num_eval_episodes):
                 with torch.no_grad():
                     if model_type == "dt":
-                        ret, length = evaluate_episode_rtg(
+                        ret, length = evaluate_episode_rtg_v1(
                             env,
                             state_dim,
                             act_dim,
                             model,
                             max_ep_len=max_ep_len,
                             scale=variant["test_scale"],
-                            target_return=[
-                                t / variant["test_scale"] for t in target_rew
-                            ],
+                            target_return=target_rew / variant["test_scale"],
                             mode=mode,
                             state_mean=state_mean,
                             state_std=state_std,
@@ -471,7 +473,7 @@ def experiment(
                 max_length=K,
                 hidden_size=variant["embed_dim"],
                 n_layer=variant["n_layer"],
-                dropout=0.0 # TODO: REMOVE after debug
+                dropout=0.0,  # TODO: REMOVE after debug
             )
     else:
         raise NotImplementedError
@@ -540,7 +542,7 @@ def experiment(
             prior=prior,
             policy_penalty=variant["policy_penalty"],
             value_penalty=variant["value_penalty"],
-            action_spec=env.action_space
+            action_spec=env.action_space,
         )
     elif model_type == "bc":
         if variant["stochastic_policy"]:
@@ -669,7 +671,7 @@ if __name__ == "__main__":
     parser.add_argument("--test_scale", type=float, default=None)
     parser.add_argument("--rtg_no_q", action="store_true", default=False)
     parser.add_argument("--infer_no_q", action="store_true", default=False)
-    
+
     parser.add_argument("--stochastic_policy", action="store_true", default=False)
     parser.add_argument("--behavior_ckpt_file", type=str, default=None)
     parser.add_argument("--policy_penalty", action="store_true", default=False)

@@ -7,7 +7,7 @@ uv run experiment.py --seed 123 \
     --exp_name brqt --save_path ./save/    \
     --max_iters 500 --num_steps_per_iter 10000 --lr_decay \
     --early_stop --k_rewards --use_discount --model_type qdt -w true, --policy_penalty --stochastic_policy \
-    --behavior_ckpt_file ./save/bc-halfcheetah-expert-123-250313-110202/epoch_9.pth \
+    --behavior_ckpt_file ./save/bc-halfcheetah-expert-123-250313-110202/epoch_9.pth --num_eval_episodes 100 \
 
 # bc with stochastic policy
 uv run experiment.py --seed 123 \
@@ -34,6 +34,14 @@ uv run experiment.py --seed 123 \
     --exp_name qt --save_path ./save/    \
     --max_iters 10 --num_steps_per_iter 10000 --lr_decay \
     --k_rewards --use_discount --model_type qdt -w true \
+
+# DT
+uv run experiment.py --seed 123 \
+    --env halfcheetah --dataset medium-expert   \
+    --eta 0.4 --grad_norm 15.0 \
+    --exp_name dt --save_path ./save/    \
+    --max_iters 10 --num_steps_per_iter 10000 --lr_decay \
+    --k_rewards --use_discount --model_type dt -w true --num_eval_episodes 100 \
 
 proxychains uv run experiment.py --seed 123 \
     --env halfcheetah --dataset medium-expert   \

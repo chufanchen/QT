@@ -62,7 +62,7 @@ def evaluate_episode(
 
     return episode_return, episode_length
 
-def evaluate_episode_rtg(
+def evaluate_episode_rtg_v1(
         env,
         state_dim,
         act_dim,
