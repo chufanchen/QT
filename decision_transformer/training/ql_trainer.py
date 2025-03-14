@@ -69,6 +69,7 @@ class QDTTrainer(Trainer):
         value_penalty=False,
     ):
         self.actor = model
+        self.model = self.actor
         self.actor_optimizer = torch.optim.Adam(
             self.actor.parameters(), lr=lr, weight_decay=weight_decay
         )
@@ -424,7 +425,7 @@ class QDTTrainer(Trainer):
                 attention_mask,
                 self.actor.temperature().detach(),  # no gradient taken here
             )
-            action_preds_ = action_dist.sample().reshape(-1, action_dim)[
+            action_preds_ = action_dist.rsample().reshape(-1, action_dim)[
                 attention_mask.reshape(-1) > 0
             ]
         else:
@@ -486,9 +487,10 @@ class QDTTrainer(Trainer):
             # )
             div_estimate = torch.mean(apn_logp[:, :, -1] - apn_logb)
             # print(div_estimate)
-            actor_loss -= self.alpha * div_estimate
+            actor_loss += self.alpha * div_estimate
 
         self.actor_optimizer.zero_grad()
+        print(actor_loss)
         actor_loss.backward()
         if self.grad_norm > 0:
             actor_grad_norms = nn.utils.clip_grad_norm_(

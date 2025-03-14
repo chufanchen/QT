@@ -303,7 +303,7 @@ class QDecisionTransformer(TrajectoryModel):
         )
 
         state_rpt = states[:, -1, :]
-        action_preds = action_preds[:, -1, :]
+        action_preds = action_preds.sample()[:, -1, :]
 
         q_value = critic.q_min(state_rpt, action_preds).flatten()
         idx = torch.multinomial(F.softmax(q_value, dim=-1), 1)
