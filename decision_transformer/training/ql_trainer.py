@@ -1,6 +1,7 @@
 import copy
 import time
 
+from decision_transformer.models.model import SquashedNormal
 import numpy as np
 import torch
 import torch.nn as nn
@@ -161,6 +162,9 @@ class QDTTrainer(Trainer):
 
         self.actor.train()
         self.critic.train()
+        action_loss = []
+        states_loss = []
+        kl_estimation = []
         bc_losses = []
         ql_losses = []
         actor_losses = []
@@ -168,6 +172,9 @@ class QDTTrainer(Trainer):
 
         for _ in trange(num_steps):
             loss_metric = self.train_step()
+            action_loss.append(loss_metric["action_loss"])
+            states_loss.append(loss_metric["states_loss"])
+            kl_estimation.append(loss_metric.get("kl_estimation", 0))
             bc_losses.append(loss_metric["bc_loss"])
             ql_losses.append(loss_metric["ql_loss"])
             actor_losses.append(loss_metric["actor_loss"])
@@ -190,6 +197,12 @@ class QDTTrainer(Trainer):
 
         logs["time/total"] = time.time() - self.start_time
         logs["time/evaluation"] = time.time() - eval_start
+        logs["training/action_loss_mean"] = np.mean(action_loss)
+        logs["training/action_loss_std"] = np.std(action_loss)
+        logs["training/states_loss_mean"] = np.mean(states_loss)
+        logs["training/states_loss_std"] = np.std(states_loss)
+        logs["training/kl_estimation_mean"] = np.mean(kl_estimation)
+        logs["training/kl_estimation_std"] = np.std(kl_estimation)
         logs["training/bc_loss_mean"] = np.mean(bc_losses)
         logs["training/bc_loss_std"] = np.std(bc_losses)
         logs["training/ql_loss_mean"] = np.mean(ql_losses)
@@ -422,6 +435,7 @@ class QDTTrainer(Trainer):
                 attention_mask,
                 0,  # no gradient taken here
             )
+            action_loss *= action_dist.std.mean() ** 2 
             action_preds_ = action_dist.rsample().reshape(-1, action_dim)[
                 attention_mask.reshape(-1) > 0
             ]
@@ -457,8 +471,11 @@ class QDTTrainer(Trainer):
         actor_loss = self.eta2 * bc_loss + self.eta * q_loss
         if self.divergence is not None and self.policy_penalty:
             
-            _, prior_dist, _ = self.prior.forward(states, _, _)
-            kl_estimation = torch.distributions.kl.kl_divergence(prior_dist, action_dist).mean()
+            _, prior_dist, _ = self.prior.forward(states, _, _, attention_mask=attention_mask)
+            masked_action_loc = action_dist.loc.reshape(-1, action_dim)[attention_mask.reshape(-1) > 0]
+            masked_action_std = action_dist.std.reshape(-1, action_dim)[attention_mask.reshape(-1) > 0]
+            masked_action_dist = SquashedNormal(masked_action_loc, masked_action_std)
+            kl_estimation = torch.distributions.kl.kl_divergence(prior_dist, masked_action_dist).mean()
             # apn = action_dist.rsample((self.n_div_samples,))
             # apn_logp = action_dist.log_prob(apn)
             # # abn = prior_dist.sample_n(self.n_div_samples)
@@ -475,7 +492,7 @@ class QDTTrainer(Trainer):
             #     self.n_div_samples,
             #     self.action_spec,
             # )
-            actor_loss += self.alpha * kl_estimation
+            actor_loss += masked_action_std.mean() ** 2 * kl_estimation
 
         self.actor_optimizer.zero_grad()
         actor_loss.backward()
@@ -508,7 +525,7 @@ class QDTTrainer(Trainer):
             )
 
         loss_metric = dict()
-        if self.divergence is not None and self.policy_penalty:
+        if self.policy_penalty:
             loss_metric["kl_estimation"] = kl_estimation.item()
         loss_metric["action_loss"] = action_loss.item()
         loss_metric["states_loss"] = states_loss.item()
