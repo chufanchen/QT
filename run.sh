@@ -7,7 +7,7 @@ uv run experiment.py --seed 123 \
     --exp_name brqt-no-kl --save_path ./save/    \
     --max_iters 500 --num_steps_per_iter 10000 --lr_decay \
     --early_stop --k_rewards --use_discount --model_type qdt -w true, --policy_penalty --stochastic_policy \
-    --behavior_ckpt_file ./save/bc-halfcheetah-expert-123-250313-110202/epoch_9.pth --num_eval_episodes 100 \
+    --n_layer 3 --embed_dim 128 --behavior_ckpt_file ./save/bc-halfcheetah-expert-123-250313-110202/epoch_9.pth --num_eval_episodes 100 \
 
 # bc with stochastic policy
 uv run experiment.py --seed 123 \
