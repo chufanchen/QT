@@ -129,7 +129,8 @@ class QDTTrainer(Trainer):
     def step_ema(self):
         if self.step > self.step_start_ema and self.step % self.update_ema_every == 0:
             self.ema.update_model_average(self.ema_model, self.actor)
-
+    
+    # NLL in Online DT
     def action_loss_fn(
         self,
         a_hat_dist,
@@ -415,12 +416,11 @@ class QDTTrainer(Trainer):
         if self.actor.stochastic_policy:
             action_dist = action_preds
             # the return action is a SquashNormal distribution
-            # NLL in Online DT
             action_loss, nll, entropy = self.action_loss_fn(
                 action_dist,  # a_hat_dist
                 clip_by_eps(action_target, self.action_spec, 1e-6),  # (batch_size, context_len, action_dim)
                 attention_mask,
-                self.actor.temperature().detach(),  # no gradient taken here
+                0,  # no gradient taken here
             )
             action_preds_ = action_dist.rsample().reshape(-1, action_dim)[
                 attention_mask.reshape(-1) > 0
@@ -443,16 +443,17 @@ class QDTTrainer(Trainer):
             rewards_loss = F.mse_loss(reward_preds, reward_target)
         else:
             rewards_loss = 0
+        # bc_loss = action_loss + states_loss + rewards_loss
         bc_loss = action_loss + states_loss + rewards_loss
 
         actor_states = states.reshape(-1, state_dim)[attention_mask.reshape(-1) > 0]
         q1_new_action, q2_new_action = self.critic(actor_states, action_preds_)
         # q1_new_action, q2_new_action = self.critic(state_target, action_preds_)
+        # TD3+BC: Normalize Q loss
         if np.random.uniform() > 0.5:
             q_loss = -q1_new_action.mean() / q2_new_action.abs().mean().detach()
         else:
             q_loss = -q2_new_action.mean() / q1_new_action.abs().mean().detach()
-
         actor_loss = self.eta2 * bc_loss + self.eta * q_loss
         if self.divergence is not None and self.policy_penalty:
             
@@ -483,8 +484,6 @@ class QDTTrainer(Trainer):
             #     self.n_div_samples,
             #     self.action_spec,
             # )
-            # div_estimate = torch.mean(apn_logp[:, :, -1] - apn_logb)
-            # print(div_estimate)
             # actor_loss += self.alpha * div_estimate
 
         self.actor_optimizer.zero_grad()
@@ -493,6 +492,7 @@ class QDTTrainer(Trainer):
             actor_grad_norms = nn.utils.clip_grad_norm_(
                 self.actor.parameters(), max_norm=self.grad_norm, norm_type=2
             )
+            self.diagnostics["training/actor_grad_norm"] = actor_grad_norms
         self.actor_optimizer.step()
 
         """ Step Target network """
@@ -508,11 +508,20 @@ class QDTTrainer(Trainer):
         self.step += 1
 
         with torch.no_grad():
+            if self.actor.stochastic_policy:
+                action_preds_ = action_dist.mode.reshape(-1, action_dim)[
+                    attention_mask.reshape(-1) > 0
+                ]
             self.diagnostics["training/action_error"] = (
                 torch.mean((action_preds_ - action_target_) ** 2).detach().cpu().item()
             )
 
         loss_metric = dict()
+        if self.divergence is not None and self.policy_penalty:
+            loss_metric["kl_estimation"] = div_estimate.item()
+        loss_metric["action_loss"] = action_loss.item()
+        loss_metric["states_loss"] = states_loss.item()
+        # loss_metric["rewards_loss"] = rewards_loss.item()
         loss_metric["bc_loss"] = bc_loss.item()
         loss_metric["ql_loss"] = q_loss.item()
         loss_metric["critic_loss"] = critic_loss.item()
