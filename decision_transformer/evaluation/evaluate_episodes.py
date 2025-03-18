@@ -40,7 +40,7 @@ def evaluate_episode(
             rewards = torch.cat([rewards, torch.zeros(1, device=device)])
         
             action = model.get_action(
-                (states.to(dtype=torch.float32) - state_mean) / state_std,
+                (states[-1,:].to(dtype=torch.float32) - state_mean) / state_std,
                 actions.to(dtype=torch.float32),
                 rewards.to(dtype=torch.float32),
                 target_return=target_return

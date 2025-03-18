@@ -399,7 +399,6 @@ class QDTTrainer(Trainer):
                 self.critic.parameters(), max_norm=self.grad_norm, norm_type=2
             )
         self.critic_optimizer.step()
-        # torch.autograd.set_detect_anomaly(True, check_nan=True)
         """Policy Training"""
         state_preds, action_preds, reward_preds = self.actor.forward(
             states,
@@ -416,8 +415,6 @@ class QDTTrainer(Trainer):
         if self.actor.stochastic_policy:
             action_dist = action_preds
             # the return action is a SquashNormal distribution
-            # action_preds_ = action_preds.rsample() # for reparameterization trick (mean + std * N(0,1))
-            # action_preds_ = action_preds.sample()
             # NLL in Online DT
             action_loss, nll, entropy = self.action_loss_fn(
                 action_dist,  # a_hat_dist
@@ -458,6 +455,7 @@ class QDTTrainer(Trainer):
 
         actor_loss = self.eta2 * bc_loss + self.eta * q_loss
         if self.divergence is not None and self.policy_penalty:
+            
             # action_dist = self.actor.forward(
             #     states,
             #     actions,
@@ -468,14 +466,14 @@ class QDTTrainer(Trainer):
             #     attention_mask=attention_mask,
             # )
             _, prior_dist, _ = self.prior.forward(states, _, _)
-
-            apn = action_dist.rsample((self.n_div_samples,))
-            apn_logp = action_dist.log_prob(apn)
-            # abn = prior_dist.sample_n(self.n_div_samples)
-            # abn_logb = prior_dist.log_prob(apn)
-            apn_logb = prior_dist.log_prob(
-                clip_by_eps(apn[:, :, -1], self.action_spec, 1e-6)
-            )
+            kl_estimation = torch.distributions.kl.kl_divergence(prior_dist, action_dist).mean()
+            # apn = action_dist.rsample((self.n_div_samples,))
+            # apn_logp = action_dist.log_prob(apn)
+            # # abn = prior_dist.sample_n(self.n_div_samples)
+            # # abn_logb = prior_dist.log_prob(apn)
+            # apn_logb = prior_dist.log_prob(
+            #     clip_by_eps(apn[:, :, -1], self.action_spec, 1e-6)
+            # )
             # abn_logp = action_dist.log_prob(clip_by_eps(abn, self.action_spec, 1e-6))
 
             # # override sample
@@ -485,9 +483,9 @@ class QDTTrainer(Trainer):
             #     self.n_div_samples,
             #     self.action_spec,
             # )
-            div_estimate = torch.mean(apn_logp[:, :, -1] - apn_logb)
+            # div_estimate = torch.mean(apn_logp[:, :, -1] - apn_logb)
             # print(div_estimate)
-            actor_loss += self.alpha * div_estimate
+            # actor_loss += self.alpha * div_estimate
 
         self.actor_optimizer.zero_grad()
         actor_loss.backward()

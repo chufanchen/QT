@@ -38,9 +38,8 @@ class StochasticActTrainer(Trainer):
             states, actions, rewards, attention_mask=attention_mask, target_return=rtg[:,0],
         )
 
-        act_dim = action_dist.loc.shape[-1]
         action_preds = action_dist.mode
-        action_target = action_target[:,-1].reshape(-1, act_dim)
+        action_target = action_target.reshape(-1, action_target.shape[-1])[attention_mask.reshape(-1) > 0]
 
         loss = self.loss_fn(
             state_preds, action_preds, reward_preds,
