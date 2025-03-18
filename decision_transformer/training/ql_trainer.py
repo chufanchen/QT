@@ -46,7 +46,7 @@ class QDTTrainer(Trainer):
         loss_fn,
         eval_fns=None,
         max_q_backup=False,
-        alpha=1.0,
+        alpha=1e-3,
         eta=1.0,
         eta2=1.0,
         ema_decay=0.995,
@@ -400,7 +400,6 @@ class QDTTrainer(Trainer):
                 self.critic.parameters(), max_norm=self.grad_norm, norm_type=2
             )
         self.critic_optimizer.step()
-        # torch.autograd.set_detect_anomaly(True, check_nan=True)
         """Policy Training"""
         state_preds, action_preds, reward_preds = self.actor.forward(
             states,
@@ -417,12 +416,6 @@ class QDTTrainer(Trainer):
         if self.actor.stochastic_policy:
             action_dist = action_preds
             # the return action is a SquashNormal distribution
-            # action_loss, nll, entropy = self.action_loss_fn(
-            #     action_dist,  # a_hat_dist
-            #     clip_by_eps(action_target, self.action_spec, 1e-6),  # (batch_size, context_len, action_dim)
-            #     attention_mask,
-            #     self.actor.temperature().detach(),  # no gradient taken here
-            # )
             action_loss, nll, entropy = self.action_loss_fn(
                 action_dist,  # a_hat_dist
                 clip_by_eps(action_target, self.action_spec, 1e-6),  # (batch_size, context_len, action_dim)
@@ -463,24 +456,16 @@ class QDTTrainer(Trainer):
             q_loss = -q2_new_action.mean() / q1_new_action.abs().mean().detach()
         actor_loss = self.eta2 * bc_loss + self.eta * q_loss
         if self.divergence is not None and self.policy_penalty:
-            # action_dist = self.actor.forward(
-            #     states,
-            #     actions,
-            #     rewards,
-            #     action_target,
-            #     rtg[:, :-1],
-            #     timesteps,
-            #     attention_mask=attention_mask,
-            # )
+            
             _, prior_dist, _ = self.prior.forward(states, _, _)
-
-            apn = action_dist.rsample((self.n_div_samples,))
-            apn_logp = action_dist.log_prob(apn)
-            # abn = prior_dist.sample_n(self.n_div_samples)
-            # abn_logb = prior_dist.log_prob(apn)
-            apn_logb = prior_dist.log_prob(
-                clip_by_eps(apn[:, :, -1], self.action_spec, 1e-6)
-            )
+            kl_estimation = torch.distributions.kl.kl_divergence(prior_dist, action_dist).mean()
+            # apn = action_dist.rsample((self.n_div_samples,))
+            # apn_logp = action_dist.log_prob(apn)
+            # # abn = prior_dist.sample_n(self.n_div_samples)
+            # # abn_logb = prior_dist.log_prob(apn)
+            # apn_logb = prior_dist.log_prob(
+            #     clip_by_eps(apn[:, :, -1], self.action_spec, 1e-6)
+            # )
             # abn_logp = action_dist.log_prob(clip_by_eps(abn, self.action_spec, 1e-6))
 
             # # override sample
@@ -490,8 +475,7 @@ class QDTTrainer(Trainer):
             #     self.n_div_samples,
             #     self.action_spec,
             # )
-            div_estimate = torch.mean(apn_logp[:, :, -1] - apn_logb)
-            # actor_loss += self.alpha * div_estimate
+            actor_loss += self.alpha * kl_estimation
 
         self.actor_optimizer.zero_grad()
         actor_loss.backward()
@@ -525,7 +509,7 @@ class QDTTrainer(Trainer):
 
         loss_metric = dict()
         if self.divergence is not None and self.policy_penalty:
-            loss_metric["kl_estimation"] = div_estimate.item()
+            loss_metric["kl_estimation"] = kl_estimation.item()
         loss_metric["action_loss"] = action_loss.item()
         loss_metric["states_loss"] = states_loss.item()
         # loss_metric["rewards_loss"] = rewards_loss.item()

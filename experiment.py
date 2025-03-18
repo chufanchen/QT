@@ -16,7 +16,7 @@ import wandb
 from decision_transformer.evaluation.evaluate_episodes import (
     evaluate_episode,
     evaluate_episode_rtg,
-    evaluate_episode_rtg_v1
+    evaluate_episode_rtg_v1,
 )
 from decision_transformer.models.decision_transformer import DecisionTransformer
 from decision_transformer.models.mlp_bc import GaussianBCModel, MLPBCModel

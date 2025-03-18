@@ -9,7 +9,9 @@ import torch.nn as nn
 
 from abc import ABC, abstractmethod
 from typing import Any, Dict, List, Tuple, Union, Callable, Optional, Sequence
+from torch.distributions import Normal, TanhTransform, TransformedDistribution
 
+# Base sequence model
 
 class TrajectoryModel(nn.Module):
     def __init__(self, state_dim, act_dim, max_length=None):
@@ -26,6 +28,9 @@ class TrajectoryModel(nn.Module):
     def get_action(self, states, actions, rewards, **kwargs):
         # these will come as tensors on the correct device
         return torch.zeros_like(actions[-1])
+    
+    
+# Building Blocks
 
 def miniblock(
     inp: int,
@@ -269,3 +274,24 @@ class Critic(nn.Module):
     def q_min(self, state, action):
         q1, q2 = self.forward(state, action)
         return torch.min(q1, q2)
+
+def extend_and_repeat(tensor: torch.Tensor, dim: int, repeat: int) -> torch.Tensor:
+    return tensor.unsqueeze(dim).repeat_interleave(repeat, dim=dim)
+
+
+def init_module_weights(module: torch.nn.Sequential, orthogonal_init: bool = False):
+    # Specific orthgonal initialization for inner layers
+    # If orthogonal init is off, we do not change default initialization
+    if orthogonal_init:
+        for submodule in module[:-1]:
+            if isinstance(submodule, nn.Linear):
+                nn.init.orthogonal_(submodule.weight, gain=np.sqrt(2))
+                nn.init.constant_(submodule.bias, 0.0)
+
+    # Lasy layers should be initialzied differently as well
+    if orthogonal_init:
+        nn.init.orthogonal_(module[-1].weight, gain=1e-2)
+    else:
+        nn.init.xavier_uniform_(module[-1].weight, gain=1e-2)
+
+    nn.init.constant_(module[-1].bias, 0.0)
