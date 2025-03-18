@@ -236,7 +236,8 @@ class DiagGaussianActor(nn.Module):
         log_std_min, log_std_max = self.log_std_bounds
         log_std = log_std_min + 0.5 * (log_std_max - log_std_min) * (log_std + 1.0)
         std = log_std.exp()
-        std = 0.01
+        # TODO:
+        std = 0.01 * torch.ones_like(std)
         return SquashedNormal(mu, std)
 
 
