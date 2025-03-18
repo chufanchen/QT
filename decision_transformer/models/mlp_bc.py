@@ -69,7 +69,7 @@ class GaussianBCModel(TrajectoryModel):
 
     def forward(self, states, actions, rewards, attention_mask=None, target_return=None):
 
-        if states.ndim == 3:
+        if states.ndim == 3 and attention_mask is not None:
             states = states.reshape(-1, states.shape[-1])[attention_mask.reshape(-1) > 0]
         action_dist = self.model(states)
 

@@ -46,7 +46,7 @@ class QDTTrainer(Trainer):
         loss_fn,
         eval_fns=None,
         max_q_backup=False,
-        alpha=1.0,
+        alpha=1e-3,
         eta=1.0,
         eta2=1.0,
         ema_decay=0.995,
@@ -457,15 +457,6 @@ class QDTTrainer(Trainer):
         actor_loss = self.eta2 * bc_loss + self.eta * q_loss
         if self.divergence is not None and self.policy_penalty:
             
-            # action_dist = self.actor.forward(
-            #     states,
-            #     actions,
-            #     rewards,
-            #     action_target,
-            #     rtg[:, :-1],
-            #     timesteps,
-            #     attention_mask=attention_mask,
-            # )
             _, prior_dist, _ = self.prior.forward(states, _, _)
             kl_estimation = torch.distributions.kl.kl_divergence(prior_dist, action_dist).mean()
             # apn = action_dist.rsample((self.n_div_samples,))
@@ -484,7 +475,7 @@ class QDTTrainer(Trainer):
             #     self.n_div_samples,
             #     self.action_spec,
             # )
-            # actor_loss += self.alpha * div_estimate
+            actor_loss += self.alpha * kl_estimation
 
         self.actor_optimizer.zero_grad()
         actor_loss.backward()
@@ -518,7 +509,7 @@ class QDTTrainer(Trainer):
 
         loss_metric = dict()
         if self.divergence is not None and self.policy_penalty:
-            loss_metric["kl_estimation"] = div_estimate.item()
+            loss_metric["kl_estimation"] = kl_estimation.item()
         loss_metric["action_loss"] = action_loss.item()
         loss_metric["states_loss"] = states_loss.item()
         # loss_metric["rewards_loss"] = rewards_loss.item()
