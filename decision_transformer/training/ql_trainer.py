@@ -47,7 +47,7 @@ class QDTTrainer(Trainer):
         loss_fn,
         eval_fns=None,
         max_q_backup=False,
-        alpha=1e-3,
+        alpha=0.1,
         eta=1.0,
         eta2=1.0,
         ema_decay=0.995,
@@ -435,7 +435,7 @@ class QDTTrainer(Trainer):
                 attention_mask,
                 0,  # no gradient taken here
             )
-            action_loss *= action_dist.std.mean() ** 2 
+            action_loss *= 0.01 ** 2 
             action_preds_ = action_dist.rsample().reshape(-1, action_dim)[
                 attention_mask.reshape(-1) > 0
             ]
@@ -472,27 +472,12 @@ class QDTTrainer(Trainer):
         if self.divergence is not None and self.policy_penalty:
             
             _, prior_dist, _ = self.prior.forward(states, _, _, attention_mask=attention_mask)
+            prior_dist_detached = SquashedNormal(prior_dist.loc.detach(), prior_dist.std.detach())
             masked_action_loc = action_dist.loc.reshape(-1, action_dim)[attention_mask.reshape(-1) > 0]
             masked_action_std = action_dist.std.reshape(-1, action_dim)[attention_mask.reshape(-1) > 0]
             masked_action_dist = SquashedNormal(masked_action_loc, masked_action_std)
-            kl_estimation = torch.distributions.kl.kl_divergence(prior_dist, masked_action_dist).mean()
-            # apn = action_dist.rsample((self.n_div_samples,))
-            # apn_logp = action_dist.log_prob(apn)
-            # # abn = prior_dist.sample_n(self.n_div_samples)
-            # # abn_logb = prior_dist.log_prob(apn)
-            # apn_logb = prior_dist.log_prob(
-            #     clip_by_eps(apn[:, :, -1], self.action_spec, 1e-6)
-            # )
-            # abn_logp = action_dist.log_prob(clip_by_eps(abn, self.action_spec, 1e-6))
-
-            # # override sample
-            # div_estimate = self.divergence.primal_estimate(
-            #     action_dist,
-            #     prior_dist,
-            #     self.n_div_samples,
-            #     self.action_spec,
-            # )
-            actor_loss += masked_action_std.mean() ** 2 * kl_estimation
+            kl_estimation = torch.distributions.kl.kl_divergence(prior_dist_detached, masked_action_dist).mean()
+            actor_loss += self.alpha * 0.01 * kl_estimation
 
         self.actor_optimizer.zero_grad()
         actor_loss.backward()

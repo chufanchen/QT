@@ -610,11 +610,18 @@ def experiment(
             best_nor_ret = nor_ret
             best_iter = iter + 1
         print(
-            f"Current best return mean is {best_ret}, normalized score is {best_nor_ret*100}, Iteration {best_iter}"
+            f"Current best return mean is {best_ret}, normalized score is {best_nor_ret * 100}, Iteration {best_iter}"
         )
 
         if variant["early_stop"] and iter >= variant["early_epoch"]:
             break
+
+    wandb.log(
+        {
+            "final_best_return_mean": best_ret,
+            "final_best_normalized_score": best_nor_ret * 100,
+        }
+    )
     print(f"The final best return mean is {best_ret}")
     print(f"The final best normalized return is {best_nor_ret * 100}")
 
@@ -654,7 +661,7 @@ if __name__ == "__main__":
 
     parser.add_argument("--discount", default=0.99, type=float)
     parser.add_argument("--tau", default=0.005, type=float)
-    parser.add_argument("--alpha", default=1.0, type=float)
+    parser.add_argument("--alpha", default=0.1, type=float)
     parser.add_argument("--eta", default=1.0, type=float)
     parser.add_argument("--eta2", default=1.0, type=float)
     parser.add_argument("--lambda", default=1.0, type=float)
