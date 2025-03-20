@@ -221,6 +221,8 @@ def experiment(
     dataset_path = f"D4RL/{env_name}-{dataset}-v{dversion}.pkl"
     if variant["use_aug"]:
         dataset_path = f"D4RL/{env_name}-{dataset}-v{dversion}_augmented_{int(100*pct_traj)}%.pkl"
+    elif variant["dataset_postfix"] is not None:
+        dataset_path = f"D4RL/{env_name}-{dataset}-v{dversion}_{variant['dataset_postfix']}.pkl"
     with open(dataset_path, "rb") as f:
         trajectories = pickle.load(f)
 
@@ -731,6 +733,7 @@ if __name__ == "__main__":
         "--dataset", type=str, default="medium"
     )  # medium, medium-replay, medium-expert, expert
     parser.add_argument("--use_aug", action="store_true", default=False)
+    parser.add_argument("--dataset_postfix", type=str, default="")
     
     parser.add_argument("--model_type", type=str, default="dt")
     parser.add_argument(
