@@ -215,15 +215,18 @@ def experiment(
 
     state_dim = env.observation_space.shape[0]
     act_dim = env.action_space.shape[0]
-
+    
+    pct_traj = variant.get("pct_traj", 1.0)
     # load dataset
     dataset_path = f"D4RL/{env_name}-{dataset}-v{dversion}.pkl"
+    if variant["use_aug"]:
+        dataset_path = f"D4RL/{env_name}-{dataset}-v{dversion}_augmented_{int(100*pct_traj)}%.pkl"
     with open(dataset_path, "rb") as f:
         trajectories = pickle.load(f)
 
     # save all path information into separate lists
     mode = variant.get("mode", "normal")
-    states, traj_lens, returns = [], [], []
+    states, traj_lens, returns, pct_traj_mask = [], [], [], []
     for path in trajectories:
         if mode == "delayed":  # delayed: all rewards moved to end of trajectory
             path["rewards"][-1] = path["rewards"].sum()
@@ -231,7 +234,11 @@ def experiment(
         states.append(path["observations"])
         traj_lens.append(len(path["observations"]))
         returns.append(path["rewards"].sum())
-    traj_lens, returns = np.array(traj_lens), np.array(returns)
+        if variant["use_aug"]:
+            pct_traj_mask.append(float(path["pct_traj_mask"]))
+        else:
+            pct_traj_mask.append(1.0)
+    traj_lens, returns, pct_traj_mask = np.array(traj_lens), np.array(returns), np.array(pct_traj_mask)
 
     # used for input normalization
     states = np.concatenate(states, axis=0)
@@ -249,7 +256,6 @@ def experiment(
     K = variant["K"]
     batch_size = variant["batch_size"]
     num_eval_episodes = variant["num_eval_episodes"]
-    pct_traj = variant.get("pct_traj", 1.0)
 
     if variant["create_pct_traj_and_exit"]:
         # Sort trajectories by return (lowest to highest)
@@ -336,6 +342,8 @@ def experiment(
         sys.exit(0)
 
     # only train on top pct_traj trajectories (for %BC experiment)
+    if variant["use_aug"]:
+        pct_traj = 1.0 # variant["pct_traj"] only used for loading data
     num_timesteps = max(int(pct_traj * num_timesteps), 1)
     sorted_inds = np.argsort(returns)  # lowest to highest
     num_trajectories = 1
@@ -722,7 +730,8 @@ if __name__ == "__main__":
     parser.add_argument(
         "--dataset", type=str, default="medium"
     )  # medium, medium-replay, medium-expert, expert
-
+    parser.add_argument("--use_aug", action="store_true", default=False)
+    
     parser.add_argument("--model_type", type=str, default="dt")
     parser.add_argument(
         "--mode", type=str, default="normal"
