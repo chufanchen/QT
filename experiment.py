@@ -437,7 +437,7 @@ def experiment(
                 )
             )
             traj_pct_mask.append(
-                traj["pct_traj_mask"]
+                traj.get("pct_traj_mask", False)
             )
 
         s = torch.from_numpy(np.concatenate(s, axis=0)).to(
@@ -744,7 +744,7 @@ if __name__ == "__main__":
         "--dataset", type=str, default="medium"
     )  # medium, medium-replay, medium-expert, expert
     parser.add_argument("--use_aug", action="store_true", default=False)
-    parser.add_argument("--dataset_postfix", type=str, default="")
+    parser.add_argument("--dataset_postfix", type=str, default=None)
 
     parser.add_argument("--model_type", type=str, default="dt")
     parser.add_argument(
