@@ -251,6 +251,90 @@ def experiment(
     num_eval_episodes = variant["num_eval_episodes"]
     pct_traj = variant.get("pct_traj", 1.0)
 
+    if variant["create_pct_traj_and_exit"]:
+        # Sort trajectories by return (lowest to highest)
+        sorted_inds = np.argsort(returns)
+
+        # Calculate how many trajectories to keep based on pct_traj
+        num_timesteps_to_keep = max(int(pct_traj * num_timesteps), 1)
+        num_trajectories = 1
+        timesteps = traj_lens[sorted_inds[-1]]
+        ind = len(trajectories) - 2
+
+        # Calculate which trajectories to keep
+        while (
+            ind >= 0
+            and timesteps + traj_lens[sorted_inds[ind]] <= num_timesteps_to_keep
+        ):
+            timesteps += traj_lens[sorted_inds[ind]]
+            num_trajectories += 1
+            ind -= 1
+
+        # Get indices of trajectories to keep (highest return trajectories)
+        keep_inds = sorted_inds[-num_trajectories:]
+        
+        # Create a set of indices to keep for fast lookup
+        keep_inds_set = set(keep_inds)
+        
+        # Create new dataset with only the top trajectories
+        filtered_trajectories = [trajectories[i] for i in keep_inds]
+        mode = variant.get("mode", "normal")
+        states_, traj_lens_, returns_= [], [], []
+        for path in filtered_trajectories:
+            if mode == "delayed":  # delayed: all rewards moved to end of trajectory
+                path["rewards"][-1] = path["rewards"].sum()
+                path["rewards"][:-1] = 0.0
+            states_.append(path["observations"])
+            traj_lens_.append(len(path["observations"]))
+            returns_.append(path["rewards"].sum())
+        traj_lens_, returns_ = np.array(traj_lens_), np.array(returns_)
+
+        # used for input normalization
+        states_ = np.concatenate(states_, axis=0)
+        num_timesteps_ = sum(traj_lens_)
+
+        print("=" * 50)
+        print(f"Filtered {int(pct_traj*100)}% : {env_name} {dataset}")
+        print(f"{len(traj_lens_)} trajectories, {num_timesteps_} timesteps found")
+        print(f"Average return: {np.mean(returns_):.2f}, std: {np.std(returns_):.2f}")
+        print(f"Max return: {np.max(returns_):.2f}, min: {np.min(returns_):.2f}")
+        print("=" * 50)
+        # Save the filtered dataset
+        filtered_dataset_path = (
+            f"D4RL/{env_name}-{dataset}-v{dversion}_filtered_{int(pct_traj*100)}%.pkl"
+        )
+        with open(filtered_dataset_path, "wb") as f:
+            pickle.dump(filtered_trajectories, f)
+            
+        # Create augmented version of the original dataset
+        augmented_trajectories = []
+        for i, traj in enumerate(trajectories):
+            # Create a copy of the trajectory to avoid modifying the original
+            augmented_traj = traj.copy()
+            
+            # Add mask indicating if this trajectory is in the top percentile
+            is_top_traj = i in keep_inds_set
+            augmented_traj["pct_traj_mask"] = is_top_traj
+            
+            augmented_trajectories.append(augmented_traj)
+            
+        # Save the augmented dataset
+        augmented_dataset_path = (
+            f"D4RL/{env_name}-{dataset}-v{dversion}_augmented_{int(pct_traj*100)}%.pkl"
+        )
+        with open(augmented_dataset_path, "wb") as f:
+            pickle.dump(augmented_trajectories, f)
+
+        print(
+            f"Saved filtered dataset with {num_trajectories}/{len(trajectories)} trajectories"
+        )
+        print(f"Original timesteps: {num_timesteps}, Filtered timesteps: {timesteps}")
+        print(f"Filtered dataset saved to: {filtered_dataset_path}")
+        print(f"Augmented dataset saved to: {augmented_dataset_path}")
+
+        # Exit without training
+        sys.exit(0)
+
     # only train on top pct_traj trajectories (for %BC experiment)
     num_timesteps = max(int(pct_traj * num_timesteps), 1)
     sorted_inds = np.argsort(returns)  # lowest to highest
@@ -645,6 +729,9 @@ if __name__ == "__main__":
     )  # normal for standard setting, delayed for sparse
     parser.add_argument("--K", type=int, default=20)
     parser.add_argument("--pct_traj", type=float, default=1.0)
+    parser.add_argument(
+        "--create_pct_traj_and_exit", action="store_true", default=False
+    )
     parser.add_argument("--batch_size", type=int, default=256)
     parser.add_argument("--embed_dim", type=int, default=256)
     parser.add_argument("--n_layer", type=int, default=4)
