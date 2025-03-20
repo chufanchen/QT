@@ -256,6 +256,7 @@ class QDTTrainer(Trainer):
             rtg,
             timesteps,
             attention_mask,
+            traj_pct_mask
         ) = self.get_batch(self.batch_size)
         # action_target = torch.clone(actions)
         batch_size = states.shape[0]
@@ -470,12 +471,25 @@ class QDTTrainer(Trainer):
             q_loss = -q2_new_action.mean() / q1_new_action.abs().mean().detach()
         actor_loss = self.eta2 * bc_loss + self.eta * q_loss
         if self.divergence is not None and self.policy_penalty:
-            
-            _, prior_dist, _ = self.prior.forward(states, _, _, attention_mask=attention_mask)
+            states_filtered = states[traj_pct_mask]
+            attention_mask_filtered = attention_mask[traj_pct_mask]
+            _, prior_dist, _ = self.prior.forward(states_filtered, _, _, attention_mask=attention_mask_filtered)
             prior_dist_detached = SquashedNormal(prior_dist.loc.detach(), prior_dist.std.detach())
-            masked_action_loc = action_dist.loc.reshape(-1, action_dim)[attention_mask.reshape(-1) > 0]
-            masked_action_std = action_dist.std.reshape(-1, action_dim)[attention_mask.reshape(-1) > 0]
+            
+            _, action_preds_filtered, _ = self.actor.forward(
+                states_filtered,
+                actions[traj_pct_mask],
+                rewards[traj_pct_mask],
+                action_target[traj_pct_mask],
+                rtg[:, :-1][traj_pct_mask],
+                timesteps[traj_pct_mask],
+                attention_mask=attention_mask_filtered,
+            )
+            
+            masked_action_loc = action_preds_filtered.loc.reshape(-1, action_dim)[attention_mask_filtered.reshape(-1) > 0]
+            masked_action_std = action_preds_filtered.std.reshape(-1, action_dim)[attention_mask_filtered.reshape(-1) > 0]
             masked_action_dist = SquashedNormal(masked_action_loc, masked_action_std)
+            
             kl_estimation = torch.distributions.kl.kl_divergence(prior_dist_detached, masked_action_dist).mean()
             actor_loss += self.alpha * 0.01 * kl_estimation
 

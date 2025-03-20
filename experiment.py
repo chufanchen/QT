@@ -215,14 +215,18 @@ def experiment(
 
     state_dim = env.observation_space.shape[0]
     act_dim = env.action_space.shape[0]
-    
+
     pct_traj = variant.get("pct_traj", 1.0)
     # load dataset
     dataset_path = f"D4RL/{env_name}-{dataset}-v{dversion}.pkl"
     if variant["use_aug"]:
-        dataset_path = f"D4RL/{env_name}-{dataset}-v{dversion}_augmented_{int(100*pct_traj)}%.pkl"
+        dataset_path = (
+            f"D4RL/{env_name}-{dataset}-v{dversion}_augmented_{int(100*pct_traj)}%.pkl"
+        )
     elif variant["dataset_postfix"] is not None:
-        dataset_path = f"D4RL/{env_name}-{dataset}-v{dversion}_{variant['dataset_postfix']}.pkl"
+        dataset_path = (
+            f"D4RL/{env_name}-{dataset}-v{dversion}_{variant['dataset_postfix']}.pkl"
+        )
     with open(dataset_path, "rb") as f:
         trajectories = pickle.load(f)
 
@@ -240,7 +244,11 @@ def experiment(
             pct_traj_mask.append(float(path["pct_traj_mask"]))
         else:
             pct_traj_mask.append(1.0)
-    traj_lens, returns, pct_traj_mask = np.array(traj_lens), np.array(returns), np.array(pct_traj_mask)
+    traj_lens, returns, pct_traj_mask = (
+        np.array(traj_lens),
+        np.array(returns),
+        np.array(pct_traj_mask),
+    )
 
     # used for input normalization
     states = np.concatenate(states, axis=0)
@@ -280,14 +288,14 @@ def experiment(
 
         # Get indices of trajectories to keep (highest return trajectories)
         keep_inds = sorted_inds[-num_trajectories:]
-        
+
         # Create a set of indices to keep for fast lookup
         keep_inds_set = set(keep_inds)
-        
+
         # Create new dataset with only the top trajectories
         filtered_trajectories = [trajectories[i] for i in keep_inds]
         mode = variant.get("mode", "normal")
-        states_, traj_lens_, returns_= [], [], []
+        states_, traj_lens_, returns_ = [], [], []
         for path in filtered_trajectories:
             if mode == "delayed":  # delayed: all rewards moved to end of trajectory
                 path["rewards"][-1] = path["rewards"].sum()
@@ -313,19 +321,19 @@ def experiment(
         )
         with open(filtered_dataset_path, "wb") as f:
             pickle.dump(filtered_trajectories, f)
-            
+
         # Create augmented version of the original dataset
         augmented_trajectories = []
         for i, traj in enumerate(trajectories):
             # Create a copy of the trajectory to avoid modifying the original
             augmented_traj = traj.copy()
-            
+
             # Add mask indicating if this trajectory is in the top percentile
             is_top_traj = i in keep_inds_set
             augmented_traj["pct_traj_mask"] = is_top_traj
-            
+
             augmented_trajectories.append(augmented_traj)
-            
+
         # Save the augmented dataset
         augmented_dataset_path = (
             f"D4RL/{env_name}-{dataset}-v{dversion}_augmented_{int(pct_traj*100)}%.pkl"
@@ -345,7 +353,7 @@ def experiment(
 
     # only train on top pct_traj trajectories (for %BC experiment)
     if variant["use_aug"]:
-        pct_traj = 1.0 # variant["pct_traj"] only used for loading data
+        pct_traj = 1.0  # variant["pct_traj"] only used for loading data
     num_timesteps = max(int(pct_traj * num_timesteps), 1)
     sorted_inds = np.argsort(returns)  # lowest to highest
     num_trajectories = 1
@@ -368,7 +376,7 @@ def experiment(
             p=p_sample,  # reweights so we sample according to timesteps
         )
 
-        s, a, r, d, rtg, timesteps, mask, target_a = [], [], [], [], [], [], [], []
+        s, a, r, d, rtg, timesteps, mask, target_a, traj_pct_mask = [[] for _ in range(9)]
         for i in range(batch_size):
             traj = trajectories[int(sorted_inds[batch_inds[i]])]
             if "hopper-medium" in gym_name:
@@ -428,6 +436,9 @@ def experiment(
                     [np.zeros((1, max_len - tlen)), np.ones((1, tlen))], axis=1
                 )
             )
+            traj_pct_mask.append(
+                traj["pct_traj_mask"]
+            )
 
         s = torch.from_numpy(np.concatenate(s, axis=0)).to(
             dtype=torch.float32, device=device
@@ -451,8 +462,8 @@ def experiment(
             dtype=torch.long, device=device
         )
         mask = torch.from_numpy(np.concatenate(mask, axis=0)).to(device=device)
-
-        return s, a, r, target_a, d, rtg, timesteps, mask
+        traj_pct_mask = torch.from_numpy(np.array(traj_pct_mask)).to(device=device)
+        return s, a, r, target_a, d, rtg, timesteps, mask, traj_pct_mask
 
     def eval_episodes(target_rew):
         def fn(model, critic=None):
@@ -734,7 +745,7 @@ if __name__ == "__main__":
     )  # medium, medium-replay, medium-expert, expert
     parser.add_argument("--use_aug", action="store_true", default=False)
     parser.add_argument("--dataset_postfix", type=str, default="")
-    
+
     parser.add_argument("--model_type", type=str, default="dt")
     parser.add_argument(
         "--mode", type=str, default="normal"
