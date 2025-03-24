@@ -165,6 +165,7 @@ class QDTTrainer(Trainer):
         action_loss = []
         states_loss = []
         kl_estimation = []
+        kl_mse = []
         bc_losses = []
         ql_losses = []
         actor_losses = []
@@ -175,6 +176,7 @@ class QDTTrainer(Trainer):
             action_loss.append(loss_metric["action_loss"])
             states_loss.append(loss_metric["states_loss"])
             kl_estimation.append(loss_metric.get("kl_estimation", 0))
+            kl_mse.append(loss_metric.get("kl_mse", 0))
             bc_losses.append(loss_metric["bc_loss"])
             ql_losses.append(loss_metric["ql_loss"])
             actor_losses.append(loss_metric["actor_loss"])
@@ -201,6 +203,8 @@ class QDTTrainer(Trainer):
         logs["training/action_loss_std"] = np.std(action_loss)
         logs["training/states_loss_mean"] = np.mean(states_loss)
         logs["training/states_loss_std"] = np.std(states_loss)
+        logs["training/kl_mse_mean"] = np.mean(kl_mse)
+        logs["training/kl_mse_std"] = np.std(kl_mse)
         logs["training/kl_estimation_mean"] = np.mean(kl_estimation)
         logs["training/kl_estimation_std"] = np.std(kl_estimation)
         logs["training/bc_loss_mean"] = np.mean(bc_losses)
@@ -241,6 +245,9 @@ class QDTTrainer(Trainer):
 
     def scale_up_eta(self, lambda_):
         self.eta2 = self.eta2 / lambda_
+    
+    def scale_up_alpha(self, lambda_):
+        self.alpha = self.alpha / lambda_
 
     def train_step(self):
         """
@@ -490,8 +497,13 @@ class QDTTrainer(Trainer):
             masked_action_std = action_preds_filtered.std.reshape(-1, action_dim)[attention_mask_filtered.reshape(-1) > 0]
             masked_action_dist = SquashedNormal(masked_action_loc, masked_action_std)
             
-            kl_estimation = torch.distributions.kl.kl_divergence(prior_dist_detached, masked_action_dist).mean()
-            actor_loss += self.alpha * 0.01 * kl_estimation
+            kl_estimation = torch.distributions.kl.kl_divergence(masked_action_dist, prior_dist_detached).mean()
+            kl_mse = F.mse_loss(prior_dist_detached.loc, masked_action_dist.loc)
+            actor_loss += self.alpha * 0.0002 * kl_estimation
+            # print(kl_mse)
+            # print(kl_estimation)
+            # print(kl_estimation/kl_mse)
+            # actor_loss += self.alpha * kl_mse
 
         self.actor_optimizer.zero_grad()
         actor_loss.backward()
@@ -526,6 +538,7 @@ class QDTTrainer(Trainer):
         loss_metric = dict()
         if self.policy_penalty:
             loss_metric["kl_estimation"] = kl_estimation.item()
+            loss_metric["kl_mse"] = kl_mse.item()
         loss_metric["action_loss"] = action_loss.item()
         loss_metric["states_loss"] = states_loss.item()
         # loss_metric["rewards_loss"] = rewards_loss.item()

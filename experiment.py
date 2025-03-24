@@ -437,7 +437,7 @@ def experiment(
                 )
             )
             traj_pct_mask.append(
-                traj.get("pct_traj_mask", False)
+                traj.get("pct_traj_mask", True)
             )
 
         s = torch.from_numpy(np.concatenate(s, axis=0)).to(
@@ -682,6 +682,7 @@ def experiment(
             project="decision-transformer",
             config=variant,
         )
+        wandb.run.log_code(".")
         wandb.watch(model)
 
     best_ret = -10000
@@ -695,6 +696,7 @@ def experiment(
             wandb.log(outputs)
         if model_type == "qdt":
             trainer.scale_up_eta(variant["lambda"])
+            trainer.scale_up_alpha(variant["lambda1"])
         ret = outputs["Best_return_mean"]
         nor_ret = outputs["Best_normalized_score"]
         if ret > best_ret:
@@ -775,6 +777,7 @@ if __name__ == "__main__":
     parser.add_argument("--eta", default=1.0, type=float)
     parser.add_argument("--eta2", default=1.0, type=float)
     parser.add_argument("--lambda", default=1.0, type=float)
+    parser.add_argument("--lambda1", default=1.0, type=float)
     parser.add_argument("--max_q_backup", action="store_true", default=False)
     parser.add_argument("--lr_decay", action="store_true", default=False)
     parser.add_argument("--grad_norm", default=2.0, type=float)
