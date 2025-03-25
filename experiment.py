@@ -1,4 +1,3 @@
-import argparse
 import os
 import pathlib
 import pickle
@@ -11,7 +10,8 @@ import gym
 import numpy as np
 import torch
 import wandb
-# from torch.utils.tensorboard import SummaryWriter
+import hydra
+from omegaconf import DictConfig, OmegaConf
 
 from decision_transformer.evaluation.evaluate_episodes import (
     evaluate_episode,
@@ -28,27 +28,7 @@ from decision_transformer.training.seq_trainer import SequenceTrainer
 
 from tqdm import tqdm, trange
 
-
-class TrainerConfig:
-    # optimization parameters
-    max_epochs = 10
-    batch_size = 64
-    learning_rate = 3e-4
-    betas = (0.9, 0.95)
-    grad_norm_clip = 1.0
-    weight_decay = 0.1  # only applied on matmul weights
-    # learning rate decay params: linear warmup followed by cosine decay to 10% of original
-    lr_decay = False
-    warmup_tokens = 375e6  # these two numbers come from the GPT-3 paper, but may not be good defaults elsewhere
-    final_tokens = 260e9  # (at what point we reach 10% of original LR)
-    # checkpoint settings
-    ckpt_path = None
-    num_workers = 8  # for DataLoader
-
-    def __init__(self, **kwargs):
-        for k, v in kwargs.items():
-            setattr(self, k, v)
-
+os.environ["D4RL_SUPPRESS_IMPORT_ERROR"] = "1"
 
 def save_checkpoint(state, name):
     filename = name
@@ -92,22 +72,24 @@ def set_seed(seed):
     torch.backends.cudnn.deterministic = True
 
 
-def experiment(
-    exp_prefix,
-    variant,
-):
+def experiment(cfg: DictConfig):
+    print(cfg)
+    # Convert to regular dict for easier access
+    variant = OmegaConf.to_container(cfg, resolve=True)
+    print("Running experiment with:")
+    print(variant)
     device = variant.get("device", "cuda")
     log_to_wandb = variant.get("log_to_wandb", False)
 
     env_name, dataset = variant["env"], variant["dataset"]
     model_type = variant["model_type"]
     seed = variant["seed"]
-    group_name = f"{exp_prefix}-{env_name}-{dataset}"
+    group_name = f"{variant['exp_name']}-{env_name}-{dataset}"
     timestr = time.strftime("%y%m%d-%H%M%S")
     exp_prefix = f"{group_name}-{seed}-{timestr}"
 
     if not os.path.exists(os.path.join(variant["save_path"], exp_prefix)):
-        pathlib.Path(args.save_path + exp_prefix).mkdir(parents=True, exist_ok=True)
+        pathlib.Path(variant["save_path"] + exp_prefix).mkdir(parents=True, exist_ok=True)
 
     if env_name == "hopper":
         dversion = 2
@@ -578,7 +560,6 @@ def experiment(
                 max_length=K,
                 hidden_size=variant["embed_dim"],
                 n_layer=variant["n_layer"],
-                dropout=0.0,  # TODO: REMOVE after debug
             )
     else:
         raise NotImplementedError
@@ -677,10 +658,12 @@ def experiment(
 
     if log_to_wandb:
         wandb.init(
+            **variant["wandb_param"],
             name=exp_prefix,
             group=group_name,
-            project="decision-transformer",
             config=variant,
+            monitor_gym=True,
+            save_code=True,
         )
         wandb.run.log_code(".")
         wandb.watch(model)
@@ -731,72 +714,8 @@ def experiment(
     )
     print(f"The final best return mean is {best_ret}")
     print(f"The final best normalized return is {best_nor_ret * 100}")
+    return best_nor_ret
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--exp_name", type=str, default="gym-experiment")
-    parser.add_argument("--log_to_wandb", "-w", type=bool, default=False)
-    parser.add_argument("--device", type=str, default="cuda")
-    parser.add_argument("--save_path", type=str, default="./save/")
-
-    parser.add_argument("--seed", type=int, default=123)
-    parser.add_argument("--env", type=str, default="hopper")
-    parser.add_argument(
-        "--dataset", type=str, default="medium"
-    )  # medium, medium-replay, medium-expert, expert
-    parser.add_argument("--use_aug", action="store_true", default=False)
-    parser.add_argument("--dataset_postfix", type=str, default=None)
-
-    parser.add_argument("--model_type", type=str, default="dt")
-    parser.add_argument(
-        "--mode", type=str, default="normal"
-    )  # normal for standard setting, delayed for sparse
-    parser.add_argument("--K", type=int, default=20)
-    parser.add_argument("--pct_traj", type=float, default=1.0)
-    parser.add_argument(
-        "--create_pct_traj_and_exit", action="store_true", default=False
-    )
-    parser.add_argument("--batch_size", type=int, default=256)
-    parser.add_argument("--embed_dim", type=int, default=256)
-    parser.add_argument("--n_layer", type=int, default=4)
-    parser.add_argument("--n_head", type=int, default=4)
-    parser.add_argument("--activation_function", type=str, default="relu")
-    parser.add_argument("--dropout", type=float, default=0.1)
-    parser.add_argument("--learning_rate", "-lr", type=float, default=3e-4)
-    parser.add_argument("--lr_min", type=float, default=0.0)
-    parser.add_argument("--weight_decay", "-wd", type=float, default=1e-4)
-    parser.add_argument("--warmup_steps", type=int, default=10000)
-    parser.add_argument("--num_eval_episodes", type=int, default=10)
-    parser.add_argument("--max_iters", type=int, default=500)
-    parser.add_argument("--num_steps_per_iter", type=int, default=1000)
-
-    parser.add_argument("--discount", default=0.99, type=float)
-    parser.add_argument("--tau", default=0.005, type=float)
-    parser.add_argument("--alpha", default=0.1, type=float)
-    parser.add_argument("--eta", default=1.0, type=float)
-    parser.add_argument("--eta2", default=1.0, type=float)
-    parser.add_argument("--lambda", default=1.0, type=float)
-    parser.add_argument("--lambda1", default=1.0, type=float)
-    parser.add_argument("--max_q_backup", action="store_true", default=False)
-    parser.add_argument("--lr_decay", action="store_true", default=False)
-    parser.add_argument("--grad_norm", default=2.0, type=float)
-    parser.add_argument("--early_stop", action="store_true", default=False)
-    parser.add_argument("--early_epoch", type=int, default=100)
-    parser.add_argument("--k_rewards", action="store_true", default=False)
-    parser.add_argument("--use_discount", action="store_true", default=False)
-    parser.add_argument("--sar", action="store_true", default=False)
-    parser.add_argument("--reward_tune", default="no", type=str)
-    parser.add_argument("--scale", type=float, default=None)
-    parser.add_argument("--test_scale", type=float, default=None)
-    parser.add_argument("--rtg_no_q", action="store_true", default=False)
-    parser.add_argument("--infer_no_q", action="store_true", default=False)
-
-    parser.add_argument("--stochastic_policy", action="store_true", default=False)
-    parser.add_argument("--behavior_ckpt_file", type=str, default=None)
-    parser.add_argument("--policy_penalty", action="store_true", default=False)
-    parser.add_argument("--value_penalty", action="store_true", default=False)
-
-    args = parser.parse_args()
-
-    experiment(args.exp_name, variant=vars(args))
+    best_normalized_score = experiment()
