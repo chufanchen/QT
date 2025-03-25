@@ -29,6 +29,7 @@ from decision_transformer.training.seq_trainer import SequenceTrainer
 from tqdm import tqdm, trange
 
 os.environ["D4RL_SUPPRESS_IMPORT_ERROR"] = "1"
+# os.environ["WADNB_MODE"] = "offline"
 
 def save_checkpoint(state, name):
     filename = name

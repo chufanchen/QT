@@ -1,0 +1,24 @@
+defaults:
+  - base
+  - _self_
+
+# Environment settings
+dataset: medium-expert
+use_aug: true
+pct_traj: 0.1
+
+# Model settings
+model_type: qdt
+stochastic_policy: true
+policy_penalty: true
+
+# Training settings
+alpha: 0.01
+eta: 0.4
+eta2: 1.0
+grad_norm: 15.0
+behavior_ckpt_file: ./save/10%_bc_stochastic-halfcheetah-medium-replay-123-250324-112957/epoch_16.pth
+
+# Logging settings
+exp_name: erqt-gaussian-no-lr-decay
+project_name: erqt 
