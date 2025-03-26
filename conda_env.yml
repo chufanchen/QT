@@ -2,6 +2,7 @@ name: erqt
 channels:
   - pytorch
   - conda-forge
+  - menpo
 dependencies:
   - anaconda
   - cudatoolkit=10.2.89
@@ -9,5 +10,8 @@ dependencies:
   - numpy
   - pip
   - gcc
+  - glfw3
+  - mesalib
+  - glew
   - pip:
     - -r requirements.txt
