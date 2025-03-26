@@ -1,4 +1,4 @@
-env: halfcheetah
+env: hopper
 dataset: medium-replay
 use_aug: true
 pct_traj: 0.1

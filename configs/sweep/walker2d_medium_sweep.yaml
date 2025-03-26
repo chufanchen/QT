@@ -1,0 +1,37 @@
+# @package _global_
+defaults:
+  - agent_params: ../../agent_params/erqt
+  - env_params: ../../env_params/walker2d_medium
+  - run_params: ../../run_params/base
+  - _self_
+  - override /hydra/sweeper: optuna
+  - override /hydra/launcher: ray
+
+hydra:
+  launcher:
+    ray:
+      init:
+        num_gpus: 4
+        local_mode: false
+        _temp_dir: /home/data_hdd/ray_tmp
+      remote:
+        num_gpus: 1
+        max_calls: 1
+  sweeper:
+    sampler:
+      seed: 123
+    direction: maximize
+    study_name: walker2d_medium_optimization
+    storage: null  # Use in-memory storage
+    n_trials: 200
+    n_jobs: 8      # Number of parallel jobs
+    params:
+      K: choice(5, 10, 20)
+      learning_rate: choice(0.0001, 0.0003, 0.0005, 0.001)
+      lr_decay: choice(true, false)
+      eta: choice(0.4, 1.0, 5.0)
+      alpha: choice(1e-6, 1e-5, 1e-4, 1e-3, 0.01, 0.1, 0.5, 1.0, 10.0)
+      seed: choice(0, 123, 456, 789)
+  sweep:
+    dir: multirun/${now:%Y-%m-%d}/${now:%H-%M-%S}
+    subdir: ${hydra.job.num}

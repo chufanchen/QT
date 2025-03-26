@@ -243,7 +243,7 @@ def experiment(cfg: DictConfig):
     batch_size = cfg.run_params.batch_size
     num_eval_episodes = cfg.run_params.num_eval_episodes
 
-    if cfg.env_params.create_pct_traj_and_exit:
+    if cfg.run_params.create_pct_traj_and_exit:
         # Sort trajectories by return (lowest to highest)
         sorted_inds = np.argsort(returns)
 

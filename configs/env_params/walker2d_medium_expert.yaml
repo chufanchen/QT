@@ -1,5 +1,5 @@
-env: halfcheetah
-dataset: medium-replay
+env: walker2d
+dataset: medium-expert
 use_aug: true
 pct_traj: 0.1
 dataset_postfix: null
