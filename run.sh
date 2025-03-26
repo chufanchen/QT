@@ -1,124 +1,83 @@
 #!/bin/bash
 
-# QT + policy regularization
-uv run experiment.py --seed 123 \
-    --env halfcheetah --dataset medium-replay   \
-    --eta 0.4 --grad_norm 15.0 \
-    --exp_name brqt-no-kl --save_path ./save/    \
-    --max_iters 500 --num_steps_per_iter 10000 --lr_decay \
-    --early_stop --k_rewards --use_discount --model_type qdt -w true, --policy_penalty --stochastic_policy \
-    --n_layer 3 --embed_dim 128 --behavior_ckpt_file ./save/bc-halfcheetah-expert-123-250313-110202/epoch_9.pth --num_eval_episodes 100 \
+## Filtered BC
 
-# bc with stochastic policy
-uv run experiment.py --seed 123 \
-    --env halfcheetah --dataset medium-expert   \
-    --eta 0.4 --grad_norm 15.0 \
-    --exp_name bc_stochastic --save_path ./save/    \
-    --max_iters 500 --num_steps_per_iter 10000 --lr_decay \
-    --early_stop --k_rewards --use_discount --model_type bc -w true --batch_size 64 \
-    --n_layer 3 --embed_dim 128 --learning_rate 1e-4 --num_eval_episodes 100 --stochastic_policy \
+python main.py agent_params=bc env_params.pct_traj=0.1 env_params=halfcheetah_medium
 
-# bc with deterministic policy
-uv run experiment.py --seed 123 \
-    --env halfcheetah --dataset medium-expert   \
-    --eta 0.4 --grad_norm 15.0 \
-    --exp_name bc_deterministic --save_path ./save/    \
-    --max_iters 500 --num_steps_per_iter 10000 --lr_decay \
-    --early_stop --k_rewards --use_discount --model_type bc -w true --batch_size 64 \
-    --n_layer 3 --embed_dim 128 --learning_rate 1e-4 --num_eval_episodes 100 \
+python main.py agent_params=bc env_params.pct_traj=0.1 env_params=halfcheetah_medium_expert
 
-# QT
-uv run experiment.py --seed 123 \
-    --env halfcheetah --dataset medium-replay   \
-    --eta 0.4 --grad_norm 15.0 \
-    --exp_name qt --save_path ./save/    \
-    --max_iters 500 --num_steps_per_iter 10000 --lr_decay \
-    --k_rewards --use_discount --model_type qdt -w true --device cuda:3 \
+python main.py agent_params=bc env_params.pct_traj=0.1 env_params=halfcheetah_medium_replay
 
-# DT
-uv run experiment.py --seed 123 \
-    --env halfcheetah --dataset medium-expert   \
-    --eta 0.4 --grad_norm 15.0 \
-    --exp_name dt --save_path ./save/    \
-    --max_iters 10 --num_steps_per_iter 10000 --lr_decay \
-    --k_rewards --use_discount --model_type dt -w true --num_eval_episodes 100 \
+python main.py agent_params=bc env_params.pct_traj=0.1 env_params=hopper_medium
 
-proxychains uv run experiment.py --seed 123 \
-    --env halfcheetah --dataset medium-expert   \
-    --eta 0.4 --grad_norm 15.0 \
-    --exp_name bc --save_path ./save/    \
-    --max_iters 500 --num_steps_per_iter 10000 --lr_decay \
-    --early_stop --k_rewards --use_discount --model_type bc -w true \
+python main.py agent_params=bc env_params.pct_traj=0.1 env_params=hopper_medium_expert
 
-proxychains uv run experiment.py --seed 123 \
-    --env halfcheetah --dataset expert   \
-    --eta 0.4 --grad_norm 15.0 \
-    --exp_name bc --save_path ./save/    \
-    --max_iters 500 --num_steps_per_iter 10000 --lr_decay \
-    --early_stop --k_rewards --use_discount --model_type bc --stochastic_policy -w true \
+python main.py agent_params=bc env_params.pct_traj=0.1 env_params=hopper_medium_replay
 
-uv run experiment.py --seed 123 \
-    --env halfcheetah --dataset medium-expert   \
-    --eta 0.4 --grad_norm 15.0 \
-    --exp_name qt --save_path ./save/    \
-    --max_iters 10 --num_steps_per_iter 10000 --lr_decay \
-    --k_rewards --use_discount  \
+python main.py agent_params=bc env_params.pct_traj=0.1 env_params=walker2d_medium
 
-python experiment.py --seed 123 \
-    --env hopper --dataset medium-expert   \
-    --eta 1.0 --grad_norm 9.0 \
-    --exp_name qt --save_path ./save/    \
-    --max_iters 500 --num_steps_per_iter 1000 --lr_decay \
-    --early_stop --k_rewards --use_discount  \
+python main.py agent_params=bc env_params.pct_traj=0.1 env_params=walker2d_medium_expert
 
-python experiment.py --seed 123 \
-    --env walker2d --dataset medium-expert   \
-    --eta 2.0 --grad_norm 5.0 \
-    --exp_name qt --save_path ./save/    \
-    --max_iters 500 --num_steps_per_iter 1000 --lr_decay \
-    --early_stop --k_rewards --use_discount  \
+python main.py agent_params=bc env_params.pct_traj=0.1 env_params=walker2d_medium_replay
 
-python experiment.py --seed 123 \
-    --env halfcheetah --dataset medium   \
-    --eta 5.0 --grad_norm 15.0 \
-    --exp_name qt --save_path ./save/    \
-    --max_iters 500 --num_steps_per_iter 1000 --lr_decay \
-    --early_stop --k_rewards --use_discount  --K 5 \
+python main.py agent_params=bc env_params.pct_traj=0.1 env_params=walker2d_medium_expert_replay
 
-python experiment.py --seed 123 \
-    --env hopper --dataset medium   \
-    --eta 1.0 --grad_norm 9.0 \
-    --exp_name qt --save_path ./save/    \
-    --max_iters 500 --num_steps_per_iter 1000 --lr_decay \
-    --early_stop --k_rewards --use_discount  \
+python main.py agent_params=bc env_params.pct_traj=0.1 env_params=walker2d_medium_replay_expert
 
-python experiment.py --seed 123 \
-    --env walker2d --dataset medium   \
-    --eta 2.0 --grad_norm 5.0 \
-    --exp_name qt --save_path ./save/    \
-    --max_iters 500 --num_steps_per_iter 1000 --lr_decay \
-    --early_stop --k_rewards --use_discount  \
+python main.py agent_params=bc env_params.pct_traj=0.1 env_params=walker2d_medium_expert_replay_expert
 
-python experiment.py --seed 123 \
-    --env halfcheetah --dataset medium-replay   \
-    --eta 5.0 --grad_norm 15.0 \
-    --exp_name qt --save_path ./save/    \
-    --max_iters 500 --num_steps_per_iter 1000 --lr_decay \
-    --early_stop --k_rewards --use_discount  --K 5 \
+#########################
 
-python experiment.py --seed 123 \
-    --env hopper --dataset medium-replay   \
-    --eta 3.0 --grad_norm 9.0 \
-    --exp_name qt --save_path ./save/    \
-    --max_iters 500 --num_steps_per_iter 1000 --lr_decay \
-    --early_stop --k_rewards --use_discount  \
+## ERQT
 
-python experiment.py --seed 123 \
-    --env walker2d --dataset medium-replay   \
-    --eta 2.0 --grad_norm 5.0 \
-    --exp_name qt --save_path ./save/    \
-    --max_iters 500 --num_steps_per_iter 1000 --lr_decay \
-    --early_stop --k_rewards --use_discount  \
+python main.py agent_params=erqt env_params.use_aug=true env_params.pct_traj=0.1 env_params=halfcheetah_medium
+
+python main.py agent_params=erqt env_params.use_aug=true env_params.pct_traj=0.1 env_params=halfcheetah_medium_expert
+
+python main.py agent_params=erqt env_params.use_aug=true env_params.pct_traj=0.1 env_params=halfcheetah_medium_replay
+
+python main.py agent_params=erqt env_params.use_aug=true env_params.pct_traj=0.1 env_params=hopper_medium
+
+python main.py agent_params=erqt env_params.use_aug=true env_params.pct_traj=0.1 env_params=hopper_medium_expert
+
+python main.py agent_params=erqt env_params.use_aug=true env_params.pct_traj=0.1 env_params=hopper_medium_replay
+
+python main.py agent_params=erqt env_params.use_aug=true env_params.pct_traj=0.1 env_params=walker2d_medium
+
+python main.py agent_params=erqt env_params.use_aug=true env_params.pct_traj=0.1 env_params=walker2d_medium_expert
+
+python main.py agent_params=erqt env_params.use_aug=true env_params.pct_traj=0.1 env_params=walker2d_medium_replay
+
+python main.py agent_params=erqt env_params.use_aug=true env_params.pct_traj=0.1 env_params=walker2d_medium_expert_replay
+
+python main.py agent_params=erqt env_params.use_aug=true env_params.pct_traj=0.1 env_params=walker2d_medium_replay_expert
+
+python main.py agent_params=erqt env_params.use_aug=true env_params.pct_traj=0.1 env_params=walker2d_medium_expert_replay_expert
+
+#########################
+
+## ERQT hyperparameters sweep
+
+python launch_sweep.py --config_file configs/sweep_params/erqt_halfcheetah_medium.yaml
+
+python launch_sweep.py --config_file configs/sweep_params/erqt_halfcheetah_medium_expert.yaml
+
+python launch_sweep.py --config_file configs/sweep_params/erqt_halfcheetah_medium_replay.yaml
+
+python launch_sweep.py --config_file configs/sweep_params/erqt_hopper_medium.yaml
+
+python launch_sweep.py --config_file configs/sweep_params/erqt_hopper_medium_expert.yaml
+
+python launch_sweep.py --config_file configs/sweep_params/erqt_hopper_medium_replay.yaml
+
+python launch_sweep.py --config_file configs/sweep_params/erqt_walker2d_medium.yaml
+
+python launch_sweep.py --config_file configs/sweep_params/erqt_walker2d_medium_expert.yaml
+
+python launch_sweep.py --config_file configs/sweep_params/erqt_walker2d_medium_replay.yaml
+
+#########################
+
 
 python experiment.py --seed 123 \
     --env pen --dataset human   \
