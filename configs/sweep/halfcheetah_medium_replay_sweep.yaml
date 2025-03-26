@@ -1,8 +1,8 @@
 # @package _global_
 defaults:
-  - agent_params: erqt
-  - env_params: halfcheetah_medium_replay
-  - run_params: base
+  - agent_params: ../../agent_params/erqt
+  - env_params: ../../env_params/halfcheetah_medium_replay
+  - run_params: ../../run_params/base
   - _self_
   - override /hydra/sweeper: optuna
   - override /hydra/launcher: ray

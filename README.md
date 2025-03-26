@@ -12,7 +12,7 @@
 ## Requirements
 ```console
 conda env create -f conda_env.yml
-source activate qdt
+source activate erqt
 ```
 
 If you encounter the `libstdc++.so.6: version 'GLIBCXX_3.4.xx' not found` error, the following command might help:
