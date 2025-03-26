@@ -1,0 +1,10 @@
+model_type: qdt
+n_layer: 3
+embed_dim: 128
+n_head: 4
+activation_function: relu
+dropout: 0.1
+value_penalty: false
+policy_penalty: false
+behavior_ckpt_file: null
+stochastic_policy: false

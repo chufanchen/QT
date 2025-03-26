@@ -1,5 +1,8 @@
 # @package _global_
 defaults:
+  - agent_params: erqt
+  - env_params: halfcheetah_medium_replay
+  - run_params: base
   - _self_
   - override /hydra/sweeper: optuna
   - override /hydra/launcher: ray
@@ -32,67 +35,3 @@ hydra:
   sweep:
     dir: multirun/${now:%Y-%m-%d}/${now:%H-%M-%S}
     subdir: ${hydra.job.num}
-
-
-seed: 0
-model_type: qdt
-mode: normal
-n_layer: 3
-embed_dim: 128
-n_head: 4
-K: 5
-activation_function: relu
-dropout: 0.1
-
-batch_size: 32
-learning_rate: 0.0001
-lr_decay: true
-lr_min: 0.0
-weight_decay: 1e-4
-grad_norm: 15.0
-
-warmup_steps: 10000
-num_eval_episodes: 10
-max_iters: 500
-num_steps_per_iter: 10000
-
-env: halfcheetah
-dataset: medium-replay
-use_aug: true
-pct_traj: 0.1
-dataset_postfix: null
-create_pct_traj_and_exit: false
-
-discount: 0.99
-use_discount: true
-k_rewards: true
-reward_tune: no
-sar: false
-scale: null
-test_scale: null
-rtg_no_q: false
-infer_no_q: false
-
-tau: 0.005
-alpha: 0.01
-eta: 1.0
-eta2: 1.0
-lambda: 1.0
-lambda1: 1.0
-max_q_backup: true
-
-early_stop: true
-early_epoch: 100
-
-log_to_wandb: true
-exp_name: test
-save_path: ./save/
-
-wandb_param:
-  project: erqt
-  tags: ["sweep", "halfcheetah"]
-
-stochastic_policy: true
-policy_penalty: true
-value_penalty: false
-behavior_ckpt_file: "./save/10%_bc_stochastic-halfcheetah-medium-replay-123-250324-112957/epoch_15.pth"

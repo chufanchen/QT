@@ -1,0 +1,12 @@
+env: halfcheetah
+dataset: medium-expert
+use_aug: true
+pct_traj: 0.1
+dataset_postfix: null
+create_pct_traj_and_exit: false
+max_ep_len: 1000
+mode: normal
+env_targets:
+  - 12000
+  - 9000
+  - 6000

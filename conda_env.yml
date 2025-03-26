@@ -1,11 +1,13 @@
 name: erdt
 channels:
   - pytorch
+  - conda-forge
 dependencies:
   - anaconda
   - cudatoolkit=10.2.89
   - python=3.8.5
   - numpy
   - pip
+  - gcc
   - pip:
     - -r requirements.txt

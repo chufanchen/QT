@@ -7,12 +7,13 @@ import time
 
 import d4rl
 import gym
+import hydra
 import numpy as np
 import torch
-import wandb
-import hydra
 from omegaconf import DictConfig, OmegaConf
+from tqdm import tqdm, trange
 
+import wandb
 from decision_transformer.evaluation.evaluate_episodes import (
     evaluate_episode,
     evaluate_episode_rtg,
@@ -26,10 +27,9 @@ from decision_transformer.training.act_trainer import ActTrainer, StochasticActT
 from decision_transformer.training.ql_trainer import QDTTrainer
 from decision_transformer.training.seq_trainer import SequenceTrainer
 
-from tqdm import tqdm, trange
-
 os.environ["D4RL_SUPPRESS_IMPORT_ERROR"] = "1"
 # os.environ["WADNB_MODE"] = "offline"
+
 
 def save_checkpoint(state, name):
     filename = name
@@ -74,23 +74,18 @@ def set_seed(seed):
 
 
 def experiment(cfg: DictConfig):
-    print(cfg)
-    # Convert to regular dict for easier access
-    variant = OmegaConf.to_container(cfg, resolve=True)
-    print("Running experiment with:")
-    print(variant)
-    device = variant.get("device", "cuda")
-    log_to_wandb = variant.get("log_to_wandb", False)
+    device = cfg.device
+    log_to_wandb = cfg.log_to_wandb
 
-    env_name, dataset = variant["env"], variant["dataset"]
-    model_type = variant["model_type"]
-    seed = variant["seed"]
-    group_name = f"{variant['exp_name']}-{env_name}-{dataset}"
+    env_name, dataset = cfg.env_params.env, cfg.env_params.dataset
+    model_type = cfg.agent_params.model_type
+    seed = cfg.seed
+    group_name = f"{cfg.exp_name}-{env_name}-{dataset}"
     timestr = time.strftime("%y%m%d-%H%M%S")
     exp_prefix = f"{group_name}-{seed}-{timestr}"
 
-    if not os.path.exists(os.path.join(variant["save_path"], exp_prefix)):
-        pathlib.Path(variant["save_path"] + exp_prefix).mkdir(parents=True, exist_ok=True)
+    if not os.path.exists(os.path.join(cfg.save_path, exp_prefix)):
+        pathlib.Path(cfg.save_path + exp_prefix).mkdir(parents=True, exist_ok=True)
 
     if env_name == "hopper":
         dversion = 2
@@ -177,44 +172,42 @@ def experiment(cfg: DictConfig):
     else:
         raise NotImplementedError
 
-    if variant["scale"] is not None:
-        scale = variant["scale"]
+    if cfg.run_params.scale is not None:
+        scale = cfg.run_params.scale
 
-    variant["max_ep_len"] = max_ep_len
+    cfg.env_params.max_ep_len = max_ep_len
 
     if model_type == "bc":
         env_targets = env_targets[
             :1
         ]  # since BC ignores target, no need for different evaluations
 
-    variant["env_targets"] = env_targets
+    cfg.env_params.env_targets = env_targets
 
-    variant["scale"] = scale
-    if variant["test_scale"] is None:
-        variant["test_scale"] = scale
+    cfg.run_params.scale = scale
+    if cfg.run_params.test_scale is None:
+        cfg.run_params.test_scale = scale
 
-    env.seed(variant["seed"])
-    set_seed(variant["seed"])
+    env.seed(cfg.seed)
+    set_seed(cfg.seed)
 
     state_dim = env.observation_space.shape[0]
     act_dim = env.action_space.shape[0]
 
-    pct_traj = variant.get("pct_traj", 1.0)
+    pct_traj = cfg.env_params.pct_traj
     # load dataset
     dataset_path = f"D4RL/{env_name}-{dataset}-v{dversion}.pkl"
-    if variant["use_aug"]:
+    if cfg.env_params.use_aug:
         dataset_path = (
             f"D4RL/{env_name}-{dataset}-v{dversion}_augmented_{int(100*pct_traj)}%.pkl"
         )
-    elif variant["dataset_postfix"] is not None:
-        dataset_path = (
-            f"D4RL/{env_name}-{dataset}-v{dversion}_{variant['dataset_postfix']}.pkl"
-        )
+    elif cfg.env_params.dataset_postfix is not None:
+        dataset_path = f"D4RL/{env_name}-{dataset}-v{dversion}_{cfg.env_params.dataset_postfix}.pkl"
     with open(dataset_path, "rb") as f:
         trajectories = pickle.load(f)
 
     # save all path information into separate lists
-    mode = variant.get("mode", "normal")
+    mode = cfg.env_params.mode
     states, traj_lens, returns, pct_traj_mask = [], [], [], []
     for path in trajectories:
         if mode == "delayed":  # delayed: all rewards moved to end of trajectory
@@ -223,7 +216,7 @@ def experiment(cfg: DictConfig):
         states.append(path["observations"])
         traj_lens.append(len(path["observations"]))
         returns.append(path["rewards"].sum())
-        if variant["use_aug"]:
+        if cfg.env_params.use_aug:
             pct_traj_mask.append(float(path["pct_traj_mask"]))
         else:
             pct_traj_mask.append(1.0)
@@ -246,11 +239,11 @@ def experiment(cfg: DictConfig):
     print(f"Max return: {np.max(returns):.2f}, min: {np.min(returns):.2f}")
     print("=" * 50)
 
-    K = variant["K"]
-    batch_size = variant["batch_size"]
-    num_eval_episodes = variant["num_eval_episodes"]
+    K = cfg.run_params.K
+    batch_size = cfg.run_params.batch_size
+    num_eval_episodes = cfg.run_params.num_eval_episodes
 
-    if variant["create_pct_traj_and_exit"]:
+    if cfg.env_params.create_pct_traj_and_exit:
         # Sort trajectories by return (lowest to highest)
         sorted_inds = np.argsort(returns)
 
@@ -277,7 +270,7 @@ def experiment(cfg: DictConfig):
 
         # Create new dataset with only the top trajectories
         filtered_trajectories = [trajectories[i] for i in keep_inds]
-        mode = variant.get("mode", "normal")
+        mode = cfg.env_params.mode
         states_, traj_lens_, returns_ = [], [], []
         for path in filtered_trajectories:
             if mode == "delayed":  # delayed: all rewards moved to end of trajectory
@@ -335,8 +328,8 @@ def experiment(cfg: DictConfig):
         sys.exit(0)
 
     # only train on top pct_traj trajectories (for %BC experiment)
-    if variant["use_aug"]:
-        pct_traj = 1.0  # variant["pct_traj"] only used for loading data
+    if cfg.env_params.use_aug:
+        pct_traj = 1.0  # pct_traj only used for loading data
     num_timesteps = max(int(pct_traj * num_timesteps), 1)
     sorted_inds = np.argsort(returns)  # lowest to highest
     num_trajectories = 1
@@ -359,7 +352,9 @@ def experiment(cfg: DictConfig):
             p=p_sample,  # reweights so we sample according to timesteps
         )
 
-        s, a, r, d, rtg, timesteps, mask, target_a, traj_pct_mask = [[] for _ in range(9)]
+        s, a, r, d, rtg, timesteps, mask, target_a, traj_pct_mask = [
+            [] for _ in range(9)
+        ]
         for i in range(batch_size):
             traj = trajectories[int(sorted_inds[batch_inds[i]])]
             if "hopper-medium" in gym_name:
@@ -380,7 +375,7 @@ def experiment(cfg: DictConfig):
                 max_ep_len - 1
             )  # padding cutoff
 
-            if variant["reward_tune"] == "cql_antmaze":
+            if cfg.run_params.reward_tune == "cql_antmaze":
                 traj_rewards = (traj["rewards"] - 0.5) * 4.0
             else:
                 traj_rewards = traj["rewards"]
@@ -419,9 +414,7 @@ def experiment(cfg: DictConfig):
                     [np.zeros((1, max_len - tlen)), np.ones((1, tlen))], axis=1
                 )
             )
-            traj_pct_mask.append(
-                traj.get("pct_traj_mask", True)
-            )
+            traj_pct_mask.append(traj.get("pct_traj_mask", True))
 
         s = torch.from_numpy(np.concatenate(s, axis=0)).to(
             dtype=torch.float32, device=device
@@ -460,8 +453,8 @@ def experiment(cfg: DictConfig):
                             act_dim,
                             model,
                             max_ep_len=max_ep_len,
-                            scale=variant["test_scale"],
-                            target_return=target_rew / variant["test_scale"],
+                            scale=cfg.run_params.test_scale,
+                            target_return=target_rew / cfg.run_params.test_scale,
                             mode=mode,
                             state_mean=state_mean,
                             state_std=state_std,
@@ -475,9 +468,9 @@ def experiment(cfg: DictConfig):
                             model,
                             critic,
                             max_ep_len=max_ep_len,
-                            scale=variant["test_scale"],
+                            scale=cfg.run_params.test_scale,
                             target_return=[
-                                t / variant["test_scale"] for t in target_rew
+                                t / cfg.run_params.test_scale for t in target_rew
                             ],
                             mode=mode,
                             state_mean=state_mean,
@@ -517,14 +510,14 @@ def experiment(cfg: DictConfig):
             act_dim=act_dim,
             max_length=K,
             max_ep_len=max_ep_len,
-            hidden_size=variant["embed_dim"],
-            n_layer=variant["n_layer"],
-            n_head=variant["n_head"],
-            n_inner=4 * variant["embed_dim"],
-            activation_function=variant["activation_function"],
+            hidden_size=cfg.agent_params.embed_dim,
+            n_layer=cfg.agent_params.n_layer,
+            n_head=cfg.agent_params.n_head,
+            n_inner=4 * cfg.agent_params.embed_dim,
+            activation_function=cfg.agent_params.activation_function,
             n_positions=1024,
-            resid_pdrop=variant["dropout"],
-            attn_pdrop=variant["dropout"],
+            resid_pdrop=cfg.agent_params.dropout,
+            attn_pdrop=cfg.agent_params.dropout,
         )
     elif model_type == "qdt":
         model = QDecisionTransformer(
@@ -532,35 +525,35 @@ def experiment(cfg: DictConfig):
             act_dim=act_dim,
             max_length=K,
             max_ep_len=max_ep_len,
-            hidden_size=variant["embed_dim"],
-            n_layer=variant["n_layer"],
-            n_head=variant["n_head"],
-            n_inner=4 * variant["embed_dim"],
-            activation_function=variant["activation_function"],
+            hidden_size=cfg.agent_params.embed_dim,
+            n_layer=cfg.agent_params.n_layer,
+            n_head=cfg.agent_params.n_head,
+            n_inner=4 * cfg.agent_params.embed_dim,
+            activation_function=cfg.agent_params.activation_function,
             n_positions=1024,
-            resid_pdrop=variant["dropout"],
-            attn_pdrop=variant["dropout"],
+            resid_pdrop=cfg.agent_params.dropout,
+            attn_pdrop=cfg.agent_params.dropout,
             scale=scale,
-            sar=variant["sar"],
-            rtg_no_q=variant["rtg_no_q"],
-            infer_no_q=variant["infer_no_q"],
-            stochastic_policy=variant["stochastic_policy"],
+            sar=cfg.run_params.sar,
+            rtg_no_q=cfg.run_params.rtg_no_q,
+            infer_no_q=cfg.run_params.infer_no_q,
+            stochastic_policy=cfg.agent_params.stochastic_policy,
         )
     elif model_type == "bc":
-        if variant["stochastic_policy"]:
+        if cfg.agent_params.stochastic_policy:
             model = GaussianBCModel(
                 state_dim=state_dim,
                 act_dim=act_dim,
-                hidden_size=variant["embed_dim"],
-                n_layer=variant["n_layer"],
+                hidden_size=cfg.agent_params.embed_dim,
+                n_layer=cfg.agent_params.n_layer,
             )
         else:
             model = MLPBCModel(
                 state_dim=state_dim,
                 act_dim=act_dim,
                 max_length=K,
-                hidden_size=variant["embed_dim"],
-                n_layer=variant["n_layer"],
+                hidden_size=cfg.agent_params.embed_dim,
+                n_layer=cfg.agent_params.n_layer,
             )
     else:
         raise NotImplementedError
@@ -568,23 +561,23 @@ def experiment(cfg: DictConfig):
     model = model.to(device=device)
     prior = None
     if model_type == "qdt":
-        critic = Critic(state_dim, act_dim, hidden_dim=variant["embed_dim"])
+        critic = Critic(state_dim, act_dim, hidden_dim=cfg.agent_params.embed_dim)
         critic = critic.to(device=device)
-        if variant["policy_penalty"] or variant["value_penalty"]:
+        if cfg.agent_params.policy_penalty or cfg.agent_params.value_penalty:
             prior = GaussianBCModel(
                 state_dim=state_dim,
                 act_dim=act_dim,
-                hidden_size=variant["embed_dim"],
-                n_layer=variant["n_layer"],
+                hidden_size=cfg.agent_params.embed_dim,
+                n_layer=cfg.agent_params.n_layer,
             )
-            load_model(variant["behavior_ckpt_file"], prior)
+            load_model(cfg.agent_params.behavior_ckpt_file, prior)
             prior = prior.to(device=device)
     else:
-        warmup_steps = variant["warmup_steps"]
+        warmup_steps = cfg.run_params.warmup_steps
         optimizer = torch.optim.AdamW(
             model.parameters(),
-            lr=variant["learning_rate"],
-            weight_decay=variant["weight_decay"],
+            lr=cfg.run_params.learning_rate,
+            weight_decay=cfg.run_params.weight_decay,
         )
         scheduler = torch.optim.lr_scheduler.LambdaLR(
             optimizer, lambda steps: min((steps + 1) / warmup_steps, 1)
@@ -605,34 +598,34 @@ def experiment(cfg: DictConfig):
             model=model,
             critic=critic,
             batch_size=batch_size,
-            tau=variant["tau"],
-            discount=variant["discount"],
+            tau=cfg.run_params.tau,
+            discount=cfg.run_params.discount,
             get_batch=get_batch,
             loss_fn=lambda s_hat, a_hat, r_hat, s, a, r: torch.mean((a_hat - a) ** 2),
             eval_fns=[eval_episodes(env_targets)],
-            max_q_backup=variant["max_q_backup"],
-            alpha=variant["alpha"],
-            eta=variant["eta"],
-            eta2=variant["eta2"],
+            max_q_backup=cfg.run_params.max_q_backup,
+            alpha=cfg.run_params.alpha,
+            eta=cfg.run_params.eta,
+            eta2=cfg.run_params.eta2,
             ema_decay=0.995,
             step_start_ema=1000,
             update_ema_every=5,
-            lr=variant["learning_rate"],
-            weight_decay=variant["weight_decay"],
-            lr_decay=variant["lr_decay"],
-            lr_maxt=variant["max_iters"],
-            lr_min=variant["lr_min"],
-            grad_norm=variant["grad_norm"],
+            lr=cfg.run_params.learning_rate,
+            weight_decay=cfg.run_params.weight_decay,
+            lr_decay=cfg.run_params.lr_decay,
+            lr_maxt=cfg.run_params.max_iters,
+            lr_min=cfg.run_params.lr_min,
+            grad_norm=cfg.run_params.grad_norm,
             scale=scale,
-            k_rewards=variant["k_rewards"],
-            use_discount=variant["use_discount"],
+            k_rewards=cfg.run_params.k_rewards,
+            use_discount=cfg.run_params.use_discount,
             prior=prior,
-            policy_penalty=variant["policy_penalty"],
-            value_penalty=variant["value_penalty"],
+            policy_penalty=cfg.agent_params.policy_penalty,
+            value_penalty=cfg.agent_params.value_penalty,
             action_spec=env.action_space,
         )
     elif model_type == "bc":
-        if variant["stochastic_policy"]:
+        if cfg.agent_params.stochastic_policy:
             trainer = StochasticActTrainer(
                 model=model,
                 optimizer=optimizer,
@@ -658,29 +651,30 @@ def experiment(cfg: DictConfig):
             )
 
     if log_to_wandb:
+        config_dict = OmegaConf.to_container(cfg, resolve=True, throw_on_missing=True)
         wandb.init(
-            **variant["wandb_param"],
+            **cfg.wandb_params,
+            tags=[exp_prefix],
             name=exp_prefix,
             group=group_name,
-            config=variant,
-            monitor_gym=True,
-            save_code=True,
+            config=config_dict,
         )
-        wandb.run.log_code(".")
         wandb.watch(model)
 
     best_ret = -10000
     best_nor_ret = -1000
     best_iter = -1
-    for iter in range(variant["max_iters"]):
+    for iter in range(cfg.run_params.max_iters):
         outputs = trainer.train_iteration(
-            num_steps=variant["num_steps_per_iter"], iter_num=iter + 1, print_logs=True
+            num_steps=cfg.run_params.num_steps_per_iter,
+            iter_num=iter + 1,
+            print_logs=True,
         )
         if log_to_wandb:
             wandb.log(outputs)
         if model_type == "qdt":
-            trainer.scale_up_eta(variant["lambda"])
-            trainer.scale_up_alpha(variant["lambda1"])
+            trainer.scale_up_eta(cfg.run_params.lambda1)
+            trainer.scale_up_alpha(cfg.run_params.lambda2)
         ret = outputs["Best_return_mean"]
         nor_ret = outputs["Best_normalized_score"]
         if ret > best_ret:
@@ -694,7 +688,7 @@ def experiment(cfg: DictConfig):
             save_checkpoint(
                 state,
                 os.path.join(
-                    variant["save_path"], exp_prefix, "epoch_{}.pth".format(iter + 1)
+                    cfg.save_path, exp_prefix, "epoch_{}.pth".format(iter + 1)
                 ),
             )
             best_ret = ret
@@ -704,7 +698,7 @@ def experiment(cfg: DictConfig):
             f"Current best return mean is {best_ret}, normalized score is {best_nor_ret * 100}, Iteration {best_iter}"
         )
 
-        if variant["early_stop"] and iter >= variant["early_epoch"]:
+        if cfg.run_params.early_stop and iter >= cfg.run_params.early_epoch:
             break
 
     wandb.log(

@@ -1,0 +1,35 @@
+batch_size: 256
+
+warmup_steps: 10000
+num_eval_episodes: 10
+max_iters: 150
+num_steps_per_iter: 10000
+early_stop: true
+early_epoch: 100
+
+discount: 0.99
+use_discount: true
+k_rewards: true
+reward_tune: no
+sar: false
+scale: null
+test_scale: null
+rtg_no_q: false
+infer_no_q: false
+max_q_backup: false
+
+learning_rate: 3e-4
+lr_decay: true
+lr_min: 0.0
+weight_decay: 1e-4
+
+tau: 0.005
+alpha: 0.01
+eta: 1.0
+eta2: 0.4
+lambda1: 1.0
+lambda2: 1.0
+
+grad_norm: 15.0
+
+K: 5

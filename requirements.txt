@@ -199,7 +199,7 @@ markupsafe==3.0.2
     #   jinja2
     #   mako
     #   werkzeug
-mjrl @ git+https://github.com/aravindr93/mjrl@3871d93763d3b49c4741e6daeaebbc605fe140dc#egg=mjrl
+mjrl @ git+https://github.com/aravindr93/mjrl@master#egg=mjrl
     # via d4rl
 mpmath==1.2.1
     # via sympy
