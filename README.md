@@ -30,16 +30,19 @@ pip3 install --upgrade protobuf==3.20.0
 When your environment is ready, you could run scripts in the "run.sh". For example:
 ``` Bash
 ## AUG
-python main.py run_params=aug env_params=halfcheetah_medium env_params.use_aug=false
+python main.py run_params=aug env_params=halfcheetah_medium 
+
+## BC
+python main.py agent_params=bc 
+
+## filtered BC
+python main.py agent_params=bc env_params.pct_traj=0.1
 
 ## ERQT
-python main.py agent_params.behavior_ckpt_file=./save/10%_bc_stochastic-halfcheetah-medium-replay-123-250324-112957/epoch_15.pth
+python main.py agent_params.behavior_ckpt_file=./save/ env_params.use_aug=true env_params.pct_traj=0.1 10%_bc_stochastic-halfcheetah-medium-replay-123-250324-112957/epoch_15.pth
 
 ## QT
 python main.py agent_params=qt
-
-## BC
-python main.py agent_params=bc
 ```
 
 ## Acknowledgments
