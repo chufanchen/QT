@@ -56,7 +56,7 @@ python main.py agent_params=erqt env_params.use_aug=true env_params.pct_traj=0.1
 
 #########################
 
-## ERQT hyperparameters sweep
+## ERQT hyperparameter sweep
 
 python launch_sweep.py --config_file configs/sweep_params/erqt_halfcheetah_medium.yaml
 

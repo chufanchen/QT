@@ -35,3 +35,5 @@ grad_norm: 15.0
 K: 5
 
 create_pct_traj_and_exit: false
+
+entropy_reg: 0.0

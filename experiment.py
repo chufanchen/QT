@@ -623,6 +623,7 @@ def experiment(cfg: DictConfig):
             policy_penalty=cfg.agent_params.policy_penalty,
             value_penalty=cfg.agent_params.value_penalty,
             action_spec=env.action_space,
+            entropy_reg=cfg.run_params.entropy_reg,
         )
     elif model_type == "bc":
         if cfg.agent_params.stochastic_policy:

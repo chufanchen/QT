@@ -68,6 +68,7 @@ class QDTTrainer(Trainer):
         action_spec=None,
         policy_penalty=True,
         value_penalty=False,
+        entropy_reg=0.0,
     ):
         self.actor = model
         self.model = self.actor
@@ -126,7 +127,7 @@ class QDTTrainer(Trainer):
         self.action_spec = action_spec
         self.start_time = time.time()
         self.step = 0
-
+        self.entropy_reg = entropy_reg
     def step_ema(self):
         if self.step > self.step_start_ema and self.step % self.update_ema_every == 0:
             self.ema.update_model_average(self.ema_model, self.actor)
@@ -441,7 +442,7 @@ class QDTTrainer(Trainer):
                 action_dist,  # a_hat_dist
                 clip_by_eps(action_target, self.action_spec, 1e-6),  # (batch_size, context_len, action_dim)
                 attention_mask,
-                0,  # no gradient taken here
+                self.entropy_reg,  # no gradient taken here
             )
             action_loss *= 0.01 ** 2 
             action_preds_ = action_dist.rsample().reshape(-1, action_dim)[
