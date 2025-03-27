@@ -40,7 +40,7 @@ When your environment is ready, you could run scripts in the "run.sh". For examp
 
 ``` Bash
 ## AUG
-python main.py run_params=aug env_params=halfcheetah_medium 
+python main.py run_params=aug env_params=halfcheetah_medium env_params.pct_traj=0.1
 
 ## BC
 python main.py agent_params=bc 
