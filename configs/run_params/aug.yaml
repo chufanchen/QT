@@ -30,7 +30,6 @@ eta2: 0.4
 lambda1: 1.0
 lambda2: 1.0
 
-grad_norm: 15.0
 
 K: 5
 

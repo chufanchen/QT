@@ -2,7 +2,7 @@ batch_size: 256
 
 warmup_steps: 10000
 num_eval_episodes: 10
-max_iters: 150
+max_iters: 500
 num_steps_per_iter: 10000
 early_stop: true
 early_epoch: 100
@@ -26,13 +26,11 @@ weight_decay: 1e-4
 tau: 0.005
 alpha: 0.01
 eta: 1.0
-eta2: 0.4
+eta2: 1.0
 lambda1: 1.0
 lambda2: 1.0
 
-grad_norm: 15.0
-
-K: 5
+K: 20
 
 create_pct_traj_and_exit: false
 

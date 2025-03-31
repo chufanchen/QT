@@ -3,8 +3,9 @@ dataset: medium
 use_aug: false
 pct_traj: 1.0
 dataset_postfix: null
-max_ep_len: 1000
+
 mode: normal
+grad_norm: 5.0
 env_targets:
   - 12000
   - 9000

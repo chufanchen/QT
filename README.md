@@ -49,7 +49,7 @@ python main.py agent_params=bc
 python main.py agent_params=bc env_params.pct_traj=0.1
 
 ## ERQT
-python main.py agent_params.behavior_ckpt_file=./save/ env_params.use_aug=true env_params.pct_traj=0.1 10%_bc_stochastic-halfcheetah-medium-replay-123-250324-112957/epoch_15.pth
+python main.py agent_params.behavior_ckpt_file=./save/10%_bc_stochastic-halfcheetah-medium-replay-123-250324-112957/epoch_15.pth env_params.use_aug=true env_params.pct_traj=0.1 
 
 ## QT
 python main.py agent_params=qt

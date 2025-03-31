@@ -175,7 +175,7 @@ def experiment(cfg: DictConfig):
     if cfg.run_params.scale is not None:
         scale = cfg.run_params.scale
 
-    cfg.env_params.max_ep_len = max_ep_len
+    # cfg.env_params.max_ep_len = max_ep_len
 
     if model_type == "bc":
         env_targets = env_targets[
@@ -615,7 +615,7 @@ def experiment(cfg: DictConfig):
             lr_decay=cfg.run_params.lr_decay,
             lr_maxt=cfg.run_params.max_iters,
             lr_min=cfg.run_params.lr_min,
-            grad_norm=cfg.run_params.grad_norm,
+            grad_norm=cfg.env_params.grad_norm,
             scale=scale,
             k_rewards=cfg.run_params.k_rewards,
             use_discount=cfg.run_params.use_discount,
@@ -653,6 +653,7 @@ def experiment(cfg: DictConfig):
 
     if log_to_wandb:
         config_dict = OmegaConf.to_container(cfg, resolve=True, throw_on_missing=True)
+        config_dict["env_params"]["max_ep_len"] = max_ep_len
         wandb.init(
             **cfg.wandb_params,
             tags=[exp_prefix],
