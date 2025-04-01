@@ -1,5 +1,18 @@
 #!/bin/bash
 
+## Augment dataset
+# Download d4rl dataset
+python D4RL/create_dataset.py
+
+python main.py run_params=aug env_params=halfcheetah_medium env_params.pct_traj=0.1
+
+python main.py run_params=aug env_params=maze2d_umaze env_params.pct_traj=0.1
+
+python main.py run_params=aug env_params=maze2d_medium env_params.pct_traj=0.1
+
+python main.py run_params=aug env_params=maze2d_large env_params.pct_traj=0.1
+
+
 ## Filtered BC
 
 python main.py agent_params=bc env_params.pct_traj=0.1 env_params=halfcheetah_medium
@@ -25,6 +38,12 @@ python main.py agent_params=bc env_params.pct_traj=0.1 env_params=walker2d_mediu
 python main.py agent_params=bc env_params.pct_traj=0.1 env_params=walker2d_medium_replay_expert
 
 python main.py agent_params=bc env_params.pct_traj=0.1 env_params=walker2d_medium_expert_replay_expert
+
+python main.py agent_params=bc env_params.pct_traj=0.1 env_params=maze2d_large
+
+python main.py agent_params=bc env_params.pct_traj=0.1 env_params=maze2d_umaze
+
+python main.py agent_params=bc env_params.pct_traj=0.1 env_params=maze2d_medium
 
 #########################
 
@@ -54,27 +73,33 @@ python main.py agent_params=erqt env_params.use_aug=true env_params.pct_traj=0.1
 
 python main.py agent_params=erqt env_params.use_aug=true env_params.pct_traj=0.1 env_params=walker2d_medium_expert_replay_expert
 
+python main.py agent_params=erqt env_params.use_aug=true env_params.pct_traj=0.1 env_params=maze2d_large run_params.num_steps_per_iter=1000 run_params.eta=4.0 run_params.max_iters=100 run_params.early_epoch=50
+
+python main.py agent_params=erqt env_params.use_aug=true env_params.pct_traj=0.1 env_params=maze2d_umaze run_params.num_steps_per_iter=1000 run_params.eta=5.0 run_params.max_iters=100 run_params.early_epoch=50
+
+python main.py agent_params=erqt env_params.use_aug=true env_params.pct_traj=0.1 env_params=maze2d_medium run_params.num_steps_per_iter=1000 run_params.eta=5.0 run_params.max_iters=100 run_params.early_epoch=50
+
 #########################
 
 ## ERQT hyperparameter sweep
 
-python launch_sweep.py --config_file configs/sweep_params/erqt_halfcheetah_medium.yaml
+python launch_sweep.py --config-name sweep/halfcheetah_medium_sweep.yaml env_params.use_aug=true env_params.pct_traj=0.1 -m
 
-python launch_sweep.py --config_file configs/sweep_params/erqt_halfcheetah_medium_expert.yaml
+python launch_sweep.py --config-name sweep/halfcheetah_medium_expert_sweep.yaml env_params.use_aug=true env_params.pct_traj=0.1 -m
 
-python launch_sweep.py --config_file configs/sweep_params/erqt_halfcheetah_medium_replay.yaml
+python launch_sweep.py --config-name sweep/halfcheetah_medium_replay_sweep.yaml env_params.use_aug=true env_params.pct_traj=0.1 -m
 
-python launch_sweep.py --config_file configs/sweep_params/erqt_hopper_medium.yaml
+python launch_sweep.py --config-name sweep/hopper_medium_sweep.yaml env_params.use_aug=true env_params.pct_traj=0.1 -m
 
-python launch_sweep.py --config_file configs/sweep_params/erqt_hopper_medium_expert.yaml
+python launch_sweep.py --config-name sweep/hopper_medium_expert_sweep.yaml env_params.use_aug=true env_params.pct_traj=0.1 -m
 
-python launch_sweep.py --config_file configs/sweep_params/erqt_hopper_medium_replay.yaml
+python launch_sweep.py --config-name sweep/hopper_medium_replay_sweep.yaml env_params.use_aug=true env_params.pct_traj=0.1 -m
 
-python launch_sweep.py --config_file configs/sweep_params/erqt_walker2d_medium.yaml
+python launch_sweep.py --config-name sweep/walker2d_medium_sweep.yaml env_params.use_aug=true env_params.pct_traj=0.1 -m
 
-python launch_sweep.py --config_file configs/sweep_params/erqt_walker2d_medium_expert.yaml
+python launch_sweep.py --config-name sweep/walker2d_medium_expert_sweep.yaml env_params.use_aug=true env_params.pct_traj=0.1 -m
 
-python launch_sweep.py --config_file configs/sweep_params/erqt_walker2d_medium_replay.yaml
+python launch_sweep.py --config-name sweep/walker2d_medium_replay_sweep.yaml env_params.use_aug=true env_params.pct_traj=0.1 -m
 
 #########################
 

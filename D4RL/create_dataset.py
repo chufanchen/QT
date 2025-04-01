@@ -9,17 +9,21 @@ import d4rl
 
 datasets = []
 
-names = [
-    "halfcheetah-medium-expert-v2",
-    "halfcheetah-medium-replay-v2",
-    "halfcheetah-medium-v2",
-    "hopper-medium-expert-v2",
-    "hopper-medium-replay-v2",
-    "hopper-medium-v2",
-    "walker2d-medium-expert-v2",
-    "walker2d-medium-replay-v2",
-    "walker2d-medium-v2",
-]
+# names = [
+#     "halfcheetah-medium-expert-v2",
+#     "halfcheetah-medium-replay-v2",
+#     "halfcheetah-medium-v2",
+#     "hopper-medium-expert-v2",
+#     "hopper-medium-replay-v2",
+#     "hopper-medium-v2",
+#     "walker2d-medium-expert-v2",
+#     "walker2d-medium-replay-v2",
+#     "walker2d-medium-v2",
+# ]
+
+# names = ["kitchen-complete-v0", "kitchen-partial-v0"]
+
+names = ["maze2d-umaze-v1", "maze2d-medium-v1", "maze2d-large-v1"]
 
 
 for env_name in names:
