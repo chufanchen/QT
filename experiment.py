@@ -658,13 +658,14 @@ def experiment(cfg: DictConfig):
     if log_to_wandb:
         config_dict = OmegaConf.to_container(cfg, resolve=True, throw_on_missing=True)
         config_dict["env_params"]["max_ep_len"] = max_ep_len
+        
+        wandb.tensorboard.patch(root_logdir=cfg.save_path+exp_prefix+"/tensorboard")
         wandb.init(
             **cfg.wandb_params,
             tags=[exp_prefix],
             name=exp_prefix,
             group=group_name,
             config=config_dict,
-            sync_tensorboard=True,
         )
         wandb.watch(model)
 
