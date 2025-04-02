@@ -12,6 +12,7 @@ import numpy as np
 import torch
 from omegaconf import DictConfig, OmegaConf
 from tqdm import tqdm, trange
+from torch.utils.tensorboard import SummaryWriter
 
 import wandb
 from decision_transformer.evaluation.evaluate_episodes import (
@@ -86,6 +87,9 @@ def experiment(cfg: DictConfig):
 
     if not os.path.exists(os.path.join(cfg.save_path, exp_prefix)):
         pathlib.Path(cfg.save_path + exp_prefix).mkdir(parents=True, exist_ok=True)
+
+    # Initialize TensorBoard writer
+    tb_writer = SummaryWriter(os.path.join(cfg.save_path, exp_prefix, 'tensorboard'))
 
     if env_name == "hopper":
         dversion = 2
@@ -660,6 +664,7 @@ def experiment(cfg: DictConfig):
             name=exp_prefix,
             group=group_name,
             config=config_dict,
+            sync_tensorboard=True,
         )
         wandb.watch(model)
 
@@ -674,9 +679,11 @@ def experiment(cfg: DictConfig):
         )
         if log_to_wandb:
             wandb.log(outputs)
-        if model_type == "qdt":
-            trainer.scale_up_eta(cfg.run_params.lambda1)
-            trainer.scale_up_alpha(cfg.run_params.lambda2)
+        # Log to TensorBoard regardless of wandb setting
+        for k, v in outputs.items():
+            if isinstance(v, (int, float)):
+                tb_writer.add_scalar(k, v, iter)
+        tb_writer.flush()
         ret = outputs["Best_return_mean"]
         nor_ret = outputs["Best_normalized_score"]
         if ret > best_ret:
@@ -703,12 +710,21 @@ def experiment(cfg: DictConfig):
         if cfg.run_params.early_stop and iter >= cfg.run_params.early_epoch:
             break
 
-    wandb.log(
-        {
-            "final_best_return_mean": best_ret,
-            "final_best_normalized_score": best_nor_ret * 100,
-        }
-    )
+        if model_type == "qdt":
+            trainer.scale_up_eta(cfg.run_params.lambda1)
+            trainer.scale_up_alpha(cfg.run_params.lambda2)
+
+    # Log final metrics to both
+    final_metrics = {
+        "final_best_return_mean": best_ret,
+        "final_best_normalized_score": best_nor_ret * 100,
+    }
+    if log_to_wandb:
+        wandb.log(final_metrics)
+    for k, v in final_metrics.items():
+        tb_writer.add_scalar(k, v, cfg.run_params.max_iters)
+    tb_writer.close()
+
     print(f"The final best return mean is {best_ret}")
     print(f"The final best normalized return is {best_nor_ret * 100}")
     return best_nor_ret
