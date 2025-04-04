@@ -263,7 +263,7 @@ class Critic(nn.Module):
             nn.Mish(),
             nn.Linear(hidden_dim, 1),
         )
-
+        
     def forward(self, state, action):
         x = torch.cat([state, action], dim=-1)
         return self.q1_model(x), self.q2_model(x)
@@ -275,6 +275,21 @@ class Critic(nn.Module):
     def q_min(self, state, action):
         q1, q2 = self.forward(state, action)
         return torch.min(q1, q2)
+    
+
+class ValueModel(nn.Module):
+    def __init__(self, state_dim, hidden_dim=256):
+        super(ValueModel, self).__init__()
+        self.v_model = nn.Sequential(
+            nn.Linear(state_dim, hidden_dim),
+            nn.Mish(),
+            nn.Linear(hidden_dim, hidden_dim),
+            nn.Mish(),
+            nn.Linear(hidden_dim, 1),
+        )
+
+    def forward(self, state):
+        return self.v_model(state)
 
 def extend_and_repeat(tensor: torch.Tensor, dim: int, repeat: int) -> torch.Tensor:
     return tensor.unsqueeze(dim).repeat_interleave(repeat, dim=dim)

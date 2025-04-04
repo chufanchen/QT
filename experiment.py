@@ -356,8 +356,8 @@ def experiment(cfg: DictConfig):
             p=p_sample,  # reweights so we sample according to timesteps
         )
 
-        s, a, r, d, rtg, timesteps, mask, target_a, traj_pct_mask = [
-            [] for _ in range(9)
+        s, a, r, d, rtg, timesteps, mask, target_a, traj_pct_mask, next_s = [
+            [] for _ in range(10)
         ]
         for i in range(batch_size):
             traj = trajectories[int(sorted_inds[batch_inds[i]])]
@@ -365,9 +365,10 @@ def experiment(cfg: DictConfig):
                 si = random.randint(0, traj["rewards"].shape[0] - K - 1)
             else:
                 si = random.randint(0, traj["rewards"].shape[0] - 1)
-
+            si = min(0, si - 1)
             # get sequences from dataset
             s.append(traj["observations"][si : si + max_len].reshape(1, -1, state_dim))
+            next_s.append(traj["observations"][si + 1 : si + 1 + max_len].reshape(1, -1, state_dim))
             a.append(traj["actions"][si : si + max_len].reshape(1, -1, act_dim))
             target_a.append(traj["actions"][si : si + max_len].reshape(1, -1, act_dim))
             if "terminals" in traj:
@@ -398,6 +399,10 @@ def experiment(cfg: DictConfig):
                 [np.zeros((1, max_len - tlen, state_dim)), s[-1]], axis=1
             )
             s[-1] = (s[-1] - state_mean) / state_std
+            next_s[-1] = np.concatenate(
+                [np.zeros((1, max_len - tlen, state_dim)), next_s[-1]], axis=1
+            )
+            next_s[-1] = (next_s[-1] - state_mean) / state_std
             a[-1] = np.concatenate(
                 [np.zeros((1, max_len - tlen, act_dim)), a[-1]], axis=1
             )
@@ -421,6 +426,9 @@ def experiment(cfg: DictConfig):
             traj_pct_mask.append(traj.get("pct_traj_mask", True))
 
         s = torch.from_numpy(np.concatenate(s, axis=0)).to(
+            dtype=torch.float32, device=device
+        )
+        next_s = torch.from_numpy(np.concatenate(next_s, axis=0)).to(
             dtype=torch.float32, device=device
         )
         a = torch.from_numpy(np.concatenate(a, axis=0)).to(

@@ -69,6 +69,8 @@ class QDTTrainer(Trainer):
         policy_penalty=True,
         value_penalty=False,
         entropy_reg=0.0,
+        value_model=None,
+        iql_tau=0.7,
     ):
         self.actor = model
         self.model = self.actor
@@ -84,7 +86,11 @@ class QDTTrainer(Trainer):
         self.critic = critic
         self.critic_target = copy.deepcopy(self.critic)
         self.critic_optimizer = torch.optim.Adam(self.critic.parameters(), lr=3e-4)
-
+        self.value_model = value_model
+        if self.value_model is not None:
+            self.value_optimizer = torch.optim.Adam(self.value_model.parameters(), lr=3e-4)
+        
+        self.iql_tau = iql_tau
         if lr_decay:
             self.actor_lr_scheduler = CosineAnnealingLR(
                 self.actor_optimizer, T_max=lr_maxt, eta_min=lr_min
@@ -92,6 +98,10 @@ class QDTTrainer(Trainer):
             self.critic_lr_scheduler = CosineAnnealingLR(
                 self.critic_optimizer, T_max=lr_maxt, eta_min=lr_min
             )
+            if self.value_model is not None:
+                self.value_lr_scheduler = CosineAnnealingLR(
+                    self.value_optimizer, T_max=lr_maxt, eta_min=lr_min
+                )
 
         self.batch_size = batch_size
         self.get_batch = get_batch
@@ -128,6 +138,7 @@ class QDTTrainer(Trainer):
         self.start_time = time.time()
         self.step = 0
         self.entropy_reg = entropy_reg
+        
     def step_ema(self):
         if self.step > self.step_start_ema and self.step % self.update_ema_every == 0:
             self.ema.update_model_average(self.ema_model, self.actor)
@@ -145,11 +156,7 @@ class QDTTrainer(Trainer):
 
         entropy = a_hat_dist.entropy().mean()
         loss = -(log_likelihood + entropy_reg * entropy)
-        # if torch.isnan(loss):
-        #     print("NAN detected in action loss")
-        #     import pdb
 
-        #     pdb.set_trace()
         return (
             loss,
             -log_likelihood,
@@ -274,6 +281,9 @@ class QDTTrainer(Trainer):
 
         """Q Training"""
         current_q1, current_q2 = self.critic.forward(states, actions)
+        if self.value_model is not None:
+            current_v = self.value_model.forward(states)
+            next_v = self.value_model.forward(states[:, 1:])
 
         T = current_q1.shape[1]
         repeat_num = 10
@@ -386,7 +396,7 @@ class QDTTrainer(Trainer):
                 ).detach()  # [B, T, 1]
         else:
             if self.max_q_backup:
-                target_q1, target_q2 = self.critic_target(
+                target_q1, target_q2, _ = self.critic_target(
                     states_rpt,
                     next_action.sample()
                     if self.actor.stochastic_policy
@@ -395,7 +405,7 @@ class QDTTrainer(Trainer):
                 target_q1 = target_q1.view(batch_size, repeat_num, T, 1).max(dim=1)[0]
                 target_q2 = target_q2.view(batch_size, repeat_num, T, 1).max(dim=1)[0]
             else:
-                target_q1, target_q2 = self.critic_target(
+                target_q1, target_q2, _ = self.critic_target(
                     states,
                     next_action.sample()
                     if self.actor.stochastic_policy
@@ -414,7 +424,20 @@ class QDTTrainer(Trainer):
             current_q2[:, :-1][attention_mask[:, :-1] > 0],
             target_q[:, :-1][attention_mask[:, :-1] > 0],
         )
-
+        
+        value_loss = 0.0
+        if self.value_model is not None:
+            
+            adv = target_q.detach() - current_v
+            value_loss = torch.mean(torch.abs(self.iql_tau-(adv<0).float())* adv**2)
+            self.value_optimizer.zero_grad()
+            value_loss.backward()
+            if self.grad_norm > 0:
+                value_grad_norms = nn.utils.clip_grad_norm_(
+                    self.value_model.parameters(), max_norm=self.grad_norm, norm_type=2
+                )
+            self.value_optimizer.step()
+            
         self.critic_optimizer.zero_grad()
         critic_loss.backward()
         if self.grad_norm > 0:
