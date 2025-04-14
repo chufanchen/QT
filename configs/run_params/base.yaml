@@ -26,6 +26,7 @@ weight_decay: 1e-4
 tau: 0.005
 alpha: 0.01
 eta: 1.0
+eta1: 0.000005 
 eta2: 1.0
 lambda1: 1.0
 lambda2: 1.0
@@ -35,3 +36,6 @@ K: 20
 create_pct_traj_and_exit: false
 
 entropy_reg: 0.0
+
+priority_sampling: false
+priority_weights: 5.0

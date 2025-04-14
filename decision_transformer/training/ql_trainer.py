@@ -49,6 +49,7 @@ class QDTTrainer(Trainer):
         max_q_backup=False,
         alpha=0.1,
         eta=1.0,
+        eta1=1.0,
         eta2=1.0,
         ema_decay=0.995,
         step_start_ema=1000,
@@ -104,6 +105,7 @@ class QDTTrainer(Trainer):
         self.grad_norm = grad_norm
         self.alpha = alpha
         self.eta = eta
+        self.eta1 = eta1
         self.eta2 = eta2
         self.lr_decay = lr_decay
         self.scale = scale
@@ -145,11 +147,7 @@ class QDTTrainer(Trainer):
 
         entropy = a_hat_dist.entropy().mean()
         loss = -(log_likelihood + entropy_reg * entropy)
-        # if torch.isnan(loss):
-        #     print("NAN detected in action loss")
-        #     import pdb
 
-        #     pdb.set_trace()
         return (
             loss,
             -log_likelihood,
@@ -444,7 +442,7 @@ class QDTTrainer(Trainer):
                 attention_mask,
                 self.entropy_reg,  # no gradient taken here
             )
-            action_loss *= 0.01 ** 2 
+            action_loss *= self.eta1
             action_preds_ = action_dist.rsample().reshape(-1, action_dim)[
                 attention_mask.reshape(-1) > 0
             ]

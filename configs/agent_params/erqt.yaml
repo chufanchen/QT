@@ -8,3 +8,4 @@ value_penalty: false
 policy_penalty: true
 behavior_ckpt_file: ???
 stochastic_policy: true
+fixed_std: true
