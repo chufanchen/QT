@@ -147,6 +147,7 @@ save/
 wandb/
 multirun/
 outputs/
+checkpoint/
 
 # vscode 
 .vscode/

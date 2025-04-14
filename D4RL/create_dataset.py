@@ -21,9 +21,9 @@ datasets = []
 #     "walker2d-medium-v2",
 # ]
 
-# names = ["kitchen-complete-v0", "kitchen-partial-v0"]
+names = ["kitchen-complete-v0", "kitchen-partial-v0"]
 
-names = ["maze2d-umaze-v1", "maze2d-medium-v1", "maze2d-large-v1"]
+# names = ["maze2d-umaze-v1", "maze2d-medium-v1", "maze2d-large-v1"]
 
 
 for env_name in names:
