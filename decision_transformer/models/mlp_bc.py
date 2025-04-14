@@ -51,7 +51,7 @@ class MLPBCModel(TrajectoryModel):
         return actions[0,-1]
     
 class GaussianBCModel(TrajectoryModel):
-    def __init__(self, state_dim, act_dim, hidden_size, n_layer, dropout=0.1, max_length=1, **kwargs):
+    def __init__(self, state_dim, act_dim, hidden_size, n_layer, dropout=0.1, max_length=1, fixed_std=False, **kwargs):
         super().__init__(state_dim, act_dim)
         
         self.hidden_size = hidden_size
@@ -63,7 +63,7 @@ class GaussianBCModel(TrajectoryModel):
                 nn.Dropout(dropout),
                 nn.Linear(hidden_size, hidden_size)
             ])
-        layers.append(DiagGaussianActor(hidden_size, act_dim))     
+        layers.append(DiagGaussianActor(hidden_size, act_dim, fixed_std=fixed_std))     
         
         self.model = nn.Sequential(*layers)
 

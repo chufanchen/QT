@@ -28,6 +28,7 @@ class QDecisionTransformer(TrajectoryModel):
         stochastic_policy=False,
         init_temperature=0.1,
         target_entropy=None,
+        fixed_std=False,
         **kwargs,
     ):
         super().__init__(state_dim, act_dim, max_length=max_length)
@@ -44,6 +45,7 @@ class QDecisionTransformer(TrajectoryModel):
         self.rtg_no_q = rtg_no_q
         self.infer_no_q = infer_no_q
         self.stochastic_policy = stochastic_policy
+        self.fixed_std = fixed_std
 
         # note: the only difference between this GPT2Model and the default Huggingface version
         # is that the positional embeddings are removed (since we'll add those ourselves)
@@ -61,7 +63,7 @@ class QDecisionTransformer(TrajectoryModel):
         self.predict_state = torch.nn.Linear(hidden_size, self.state_dim)
         self.predict_rewards = torch.nn.Linear(hidden_size, 1)
         if self.stochastic_policy:
-            self.predict_action = DiagGaussianActor(hidden_size, self.act_dim)
+            self.predict_action = DiagGaussianActor(hidden_size, self.act_dim, fixed_std=self.fixed_std)
             self.log_temperature = torch.tensor(np.log(init_temperature))
             self.log_temperature.requires_grad = True
             self.target_entropy = target_entropy

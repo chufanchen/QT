@@ -29,8 +29,6 @@ from decision_transformer.training.ql_trainer import QDTTrainer
 from decision_transformer.training.seq_trainer import SequenceTrainer
 
 os.environ["D4RL_SUPPRESS_IMPORT_ERROR"] = "1"
-# os.environ["WADNB_MODE"] = "offline"
-
 
 def save_checkpoint(state, name):
     filename = name
@@ -332,8 +330,6 @@ def experiment(cfg: DictConfig):
         sys.exit(0)
 
     # only train on top pct_traj trajectories (for %BC experiment)
-    if cfg.env_params.use_aug:
-        pct_traj = 1.0  # pct_traj only used for loading data
     num_timesteps = max(int(pct_traj * num_timesteps), 1)
     sorted_inds = np.argsort(returns)  # lowest to highest
     num_trajectories = 1
@@ -343,10 +339,21 @@ def experiment(cfg: DictConfig):
         timesteps += traj_lens[sorted_inds[ind]]
         num_trajectories += 1
         ind -= 1
-    sorted_inds = sorted_inds[-num_trajectories:]
-
-    # used to reweight sampling so we sample according to timesteps instead of trajectories
-    p_sample = traj_lens[sorted_inds] / sum(traj_lens[sorted_inds])
+    if not cfg.env_params.use_aug: 
+        sorted_inds = sorted_inds[-num_trajectories:] # for %BC we only train on top pct_traj trajectories
+        # used to reweight sampling so we sample according to timesteps instead of trajectories
+        p_sample = traj_lens[sorted_inds] / sum(traj_lens[sorted_inds])
+    else: # for erqt we train on all trajectories
+        num_trajectories = len(trajectories)
+        if cfg.run_params.priority_sampling:
+            # reweight sampling so we prioritize top trajectories
+            weights = np.ones(len(trajectories))
+            weights[sorted_inds[-num_trajectories:]] = cfg.run_params.priority_weights
+            p_sample = weights[sorted_inds] / sum(weights[sorted_inds])
+        else:
+            p_sample = traj_lens[sorted_inds] / sum(traj_lens[sorted_inds])
+    
+    
 
     def get_batch(batch_size=256, max_len=K):
         batch_inds = np.random.choice(
@@ -542,6 +549,7 @@ def experiment(cfg: DictConfig):
             rtg_no_q=cfg.run_params.rtg_no_q,
             infer_no_q=cfg.run_params.infer_no_q,
             stochastic_policy=cfg.agent_params.stochastic_policy,
+            fixed_std=cfg.agent_params.fixed_std,
         )
     elif model_type == "bc":
         if cfg.agent_params.stochastic_policy:
@@ -550,6 +558,7 @@ def experiment(cfg: DictConfig):
                 act_dim=act_dim,
                 hidden_size=cfg.agent_params.embed_dim,
                 n_layer=cfg.agent_params.n_layer,
+                fixed_std=cfg.agent_params.fixed_std,
             )
         else:
             model = MLPBCModel(
@@ -610,6 +619,7 @@ def experiment(cfg: DictConfig):
             max_q_backup=cfg.run_params.max_q_backup,
             alpha=cfg.run_params.alpha,
             eta=cfg.run_params.eta,
+            eta1=cfg.run_params.eta1,
             eta2=cfg.run_params.eta2,
             ema_decay=0.995,
             step_start_ema=1000,
@@ -673,6 +683,7 @@ def experiment(cfg: DictConfig):
             config=config_dict,
         )
         wandb.watch(model)
+        
 
     best_ret = -10000
     best_nor_ret = -1000
