@@ -160,7 +160,8 @@ class QDecisionTransformer(TrajectoryModel):
             action_preds = self.predict_action(x[:, 1])
             # predict next state given state and action
             state_preds = self.predict_state(x[:, 2])
-            rewards_preds = None
+            # predict next return given state and action
+            rewards_preds = self.predict_state(x[:, 2])
 
         return state_preds, action_preds, rewards_preds
 

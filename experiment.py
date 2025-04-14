@@ -639,7 +639,8 @@ def experiment(cfg: DictConfig):
             value_penalty=cfg.agent_params.value_penalty,
             action_spec=env.action_space,
             entropy_reg=cfg.run_params.entropy_reg,
-            temperature_lr=cfg.run_params.temperature_lr
+            temperature_lr=cfg.run_params.temperature_lr,
+            pretrain_steps=cfg.run_params.pretrain_steps,
         )
     elif model_type == "bc":
         if cfg.agent_params.stochastic_policy:

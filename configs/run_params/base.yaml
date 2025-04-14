@@ -1,5 +1,6 @@
 batch_size: 256
 
+pretrain_steps: 10000
 warmup_steps: 10000
 num_eval_episodes: 10
 max_iters: 500

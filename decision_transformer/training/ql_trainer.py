@@ -71,6 +71,7 @@ class QDTTrainer(Trainer):
         value_penalty=False,
         entropy_reg=False,
         temperature_lr=1e-4,
+        pretrain_steps=10000,
     ):
         self.actor = model
         self.model = self.actor
@@ -98,6 +99,7 @@ class QDTTrainer(Trainer):
                 self.critic_optimizer, T_max=lr_maxt, eta_min=lr_min
             )
 
+        self.pretrain_steps = pretrain_steps
         self.batch_size = batch_size
         self.get_batch = get_batch
         self.loss_fn = loss_fn
@@ -182,7 +184,7 @@ class QDTTrainer(Trainer):
             entropies.append(loss_metric.get("entropy", 0))
             nlls.append(loss_metric.get("nll", 0))
             action_loss.append(loss_metric["action_loss"])
-            states_loss.append(loss_metric["states_loss"])
+            states_loss.append(loss_metric.get("states_loss", 0))
             kl_estimation.append(loss_metric.get("kl_estimation", 0))
             kl_mse.append(loss_metric.get("kl_mse", 0))
             bc_losses.append(loss_metric["bc_loss"])
@@ -204,25 +206,39 @@ class QDTTrainer(Trainer):
             outputs = eval_fn(self.actor, self.critic_target)
             for k, v in outputs.items():
                 logs[f"evaluation/{k}"] = v
-
+        
         logs["time/total"] = time.time() - self.start_time
         logs["time/evaluation"] = time.time() - eval_start
-        logs["training/action_loss_mean"] = np.mean(action_loss)
-        logs["training/action_loss_std"] = np.std(action_loss)
-        logs["training/states_loss_mean"] = np.mean(states_loss)
-        logs["training/states_loss_std"] = np.std(states_loss)
-        logs["training/kl_mse_mean"] = np.mean(kl_mse)
-        logs["training/kl_mse_std"] = np.std(kl_mse)
-        logs["training/kl_estimation_mean"] = np.mean(kl_estimation)
-        logs["training/kl_estimation_std"] = np.std(kl_estimation)
-        logs["training/bc_loss_mean"] = np.mean(bc_losses)
-        logs["training/bc_loss_std"] = np.std(bc_losses)
-        logs["training/ql_loss_mean"] = np.mean(ql_losses)
-        logs["training/ql_loss_std"] = np.std(ql_losses)
-        logs["training/actor_loss_mean"] = np.mean(actor_losses)
-        logs["training/actor_loss_std"] = np.std(actor_losses)
-        logs["training/critic_loss_mean"] = np.mean(critic_losses)
-        logs["training/critic_loss_std"] = np.std(critic_losses)
+        
+        def compute_detailed_stats(values, name):
+            if len(values) == 0:
+                return
+            
+            values = np.array(values)
+            logs[f"training/{name}_mean"] = np.mean(values)
+            logs[f"training/{name}_std"] = np.std(values)
+            logs[f"training/{name}_min"] = np.min(values)
+            logs[f"training/{name}_max"] = np.max(values)
+            # Add percentiles
+            logs[f"training/{name}_p25"] = np.percentile(values, 25)
+            logs[f"training/{name}_p50"] = np.percentile(values, 50)
+            logs[f"training/{name}_p75"] = np.percentile(values, 75)
+            logs[f"training/{name}_p95"] = np.percentile(values, 95)
+            
+            # Add histogram bins (10 bins)
+            hist, bin_edges = np.histogram(values, bins=10)
+            for i, (count, edge) in enumerate(zip(hist, bin_edges[:-1])):
+                logs[f"training/{name}_hist_bin_{i}"] = count
+                logs[f"training/{name}_hist_edge_{i}"] = edge
+        
+        compute_detailed_stats(action_loss, "action_loss")
+        compute_detailed_stats(states_loss, "states_loss")
+        compute_detailed_stats(kl_estimation, "kl_estimation")
+        compute_detailed_stats(bc_losses, "bc_loss")
+        compute_detailed_stats(ql_losses, "ql_loss")
+        compute_detailed_stats(actor_losses, "actor_loss")
+        compute_detailed_stats(critic_losses, "critic_loss")
+        
         logs["training/entropy"] = entropies[-1]
         logs["training/nll"] = nlls[-1]
         if self.actor.stochastic_policy:
@@ -463,21 +479,26 @@ class QDTTrainer(Trainer):
                 attention_mask.reshape(-1) > 0
             ]
             action_loss = F.mse_loss(action_preds_, action_target_)
-        state_preds = state_preds[:, :-1]
-        state_target = states[:, 1:]
-        states_loss = ((state_preds - state_target) ** 2)[
-            attention_mask[:, :-1] > 0
-        ].mean()
-        if reward_preds is not None:
-            reward_preds = reward_preds.reshape(-1, 1)[attention_mask.reshape(-1) > 0]
-            reward_target = (
-                rewards.reshape(-1, 1)[attention_mask.reshape(-1) > 0] / self.scale
-            )
-            rewards_loss = F.mse_loss(reward_preds, reward_target)
+        if self.actor.stochastic_policy:
+            state_preds = state_preds[:, :-1]
+            state_target = states[:, 1:]
+            states_loss = ((state_preds - state_target) ** 2)[
+                attention_mask[:, :-1] > 0
+            ].mean()
+            if reward_preds is not None:
+                reward_preds = reward_preds.reshape(-1, 1)[attention_mask.reshape(-1) > 0]
+                reward_target = (
+                    rewards.reshape(-1, 1)[attention_mask.reshape(-1) > 0] / self.scale
+                )
+                rewards_loss = F.mse_loss(reward_preds, reward_target)
         else:
             rewards_loss = 0
-        # bc_loss = action_loss + states_loss + rewards_loss
-        bc_loss = self.eta1 * action_loss + states_loss + rewards_loss
+            states_loss = 0
+
+        if self.actor.stochastic_policy:
+            bc_loss = action_loss + states_loss + rewards_loss
+        else:
+            bc_loss = self.eta1 * action_loss + states_loss + rewards_loss
 
         actor_states = states.reshape(-1, state_dim)[attention_mask.reshape(-1) > 0]
         q1_new_action, q2_new_action = self.critic(actor_states, action_preds_)
@@ -487,7 +508,10 @@ class QDTTrainer(Trainer):
             q_loss = -q1_new_action.mean() / q2_new_action.abs().mean().detach()
         else:
             q_loss = -q2_new_action.mean() / q1_new_action.abs().mean().detach()
-        actor_loss = self.eta2 * bc_loss + self.eta * q_loss
+        if self.step < self.pretrain_steps:
+            actor_loss = action_loss
+        else:
+            actor_loss = self.eta2 * bc_loss + self.eta * q_loss
         if self.divergence is not None and self.policy_penalty:
             kl_estimation = torch.zeros((1))
             kl_mse = torch.zeros((1))
@@ -512,12 +536,8 @@ class QDTTrainer(Trainer):
                 
                 kl_estimation = torch.distributions.kl.kl_divergence(masked_action_dist, prior_dist_detached).mean()
                 kl_mse = F.mse_loss(prior_dist_detached.loc, masked_action_dist.loc)
-                actor_loss += self.alpha * 0.0002 * kl_estimation
-            
-            # print(kl_mse)
-            # print(kl_estimation)
-            # print(kl_estimation/kl_mse)
-            # actor_loss += self.alpha * kl_mse
+                if self.step >= self.pretrain_steps:
+                    actor_loss += self.alpha * 0.0002 * kl_estimation
 
         self.actor_optimizer.zero_grad()
         actor_loss.backward()
