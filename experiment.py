@@ -549,6 +549,7 @@ def experiment(cfg: DictConfig):
             rtg_no_q=cfg.run_params.rtg_no_q,
             infer_no_q=cfg.run_params.infer_no_q,
             stochastic_policy=cfg.agent_params.stochastic_policy,
+            target_entropy=-act_dim,
             fixed_std=cfg.agent_params.fixed_std,
         )
     elif model_type == "bc":
@@ -638,6 +639,7 @@ def experiment(cfg: DictConfig):
             value_penalty=cfg.agent_params.value_penalty,
             action_spec=env.action_space,
             entropy_reg=cfg.run_params.entropy_reg,
+            temperature_lr=cfg.run_params.temperature_lr
         )
     elif model_type == "bc":
         if cfg.agent_params.stochastic_policy:

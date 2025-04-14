@@ -69,12 +69,16 @@ class QDTTrainer(Trainer):
         action_spec=None,
         policy_penalty=True,
         value_penalty=False,
-        entropy_reg=0.0,
+        entropy_reg=False,
+        temperature_lr=1e-4,
     ):
         self.actor = model
         self.model = self.actor
         self.actor_optimizer = torch.optim.Adam(
             self.actor.parameters(), lr=lr, weight_decay=weight_decay
+        )
+        self.temperature_optimizer = torch.optim.Adam(
+            [self.actor.log_temperature], lr=temperature_lr, betas=[0.9, 0.999]
         )
 
         self.step_start_ema = step_start_ema
@@ -130,6 +134,7 @@ class QDTTrainer(Trainer):
         self.start_time = time.time()
         self.step = 0
         self.entropy_reg = entropy_reg
+
     def step_ema(self):
         if self.step > self.step_start_ema and self.step % self.update_ema_every == 0:
             self.ema.update_model_average(self.ema_model, self.actor)
@@ -161,6 +166,8 @@ class QDTTrainer(Trainer):
 
         self.actor.train()
         self.critic.train()
+        entropies = []
+        nlls = []
         action_loss = []
         states_loss = []
         kl_estimation = []
@@ -172,6 +179,8 @@ class QDTTrainer(Trainer):
 
         for _ in trange(num_steps):
             loss_metric = self.train_step()
+            entropies.append(loss_metric.get("entropy", 0))
+            nlls.append(loss_metric.get("nll", 0))
             action_loss.append(loss_metric["action_loss"])
             states_loss.append(loss_metric["states_loss"])
             kl_estimation.append(loss_metric.get("kl_estimation", 0))
@@ -214,6 +223,10 @@ class QDTTrainer(Trainer):
         logs["training/actor_loss_std"] = np.std(actor_losses)
         logs["training/critic_loss_mean"] = np.mean(critic_losses)
         logs["training/critic_loss_std"] = np.std(critic_losses)
+        logs["training/entropy"] = entropies[-1]
+        logs["training/nll"] = nlls[-1]
+        if self.actor.stochastic_policy:
+            logs["training/temp_value"] = self.actor.temperature().detach().cpu().item()
 
         for k in self.diagnostics:
             logs[k] = self.diagnostics[k]
@@ -440,9 +453,8 @@ class QDTTrainer(Trainer):
                 action_dist,  # a_hat_dist
                 clip_by_eps(action_target, self.action_spec, 1e-6),  # (batch_size, context_len, action_dim)
                 attention_mask,
-                self.entropy_reg,  # no gradient taken here
+                self.actor.temperature().detach() if self.entropy_reg else 0.0 ,  # no gradient taken here
             )
-            action_loss *= self.eta1
             action_preds_ = action_dist.rsample().reshape(-1, action_dim)[
                 attention_mask.reshape(-1) > 0
             ]
@@ -465,7 +477,7 @@ class QDTTrainer(Trainer):
         else:
             rewards_loss = 0
         # bc_loss = action_loss + states_loss + rewards_loss
-        bc_loss = action_loss + states_loss + rewards_loss
+        bc_loss = self.eta1 * action_loss + states_loss + rewards_loss
 
         actor_states = states.reshape(-1, state_dim)[attention_mask.reshape(-1) > 0]
         q1_new_action, q2_new_action = self.critic(actor_states, action_preds_)
@@ -515,7 +527,12 @@ class QDTTrainer(Trainer):
             )
             self.diagnostics["training/actor_grad_norm"] = actor_grad_norms
         self.actor_optimizer.step()
-
+        if self.entropy_reg:
+            self.temperature_optimizer.zero_grad()
+            temperature_loss = (self.actor.temperature() * (entropy - self.actor.target_entropy).detach())
+            temperature_loss.backward()
+            self.temperature_optimizer.step()
+        
         """ Step Target network """
         self.step_ema()
 
@@ -541,6 +558,9 @@ class QDTTrainer(Trainer):
         if self.policy_penalty:
             loss_metric["kl_estimation"] = kl_estimation.item()
             loss_metric["kl_mse"] = kl_mse.item()
+        if self.actor.stochastic_policy:
+            loss_metric["nll"] = nll.item()
+            loss_metric["entropy"] = entropy.item()
         loss_metric["action_loss"] = action_loss.item()
         loss_metric["states_loss"] = states_loss.item()
         # loss_metric["rewards_loss"] = rewards_loss.item()

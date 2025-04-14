@@ -19,6 +19,7 @@ infer_no_q: false
 max_q_backup: false
 
 learning_rate: 3e-4
+temperature_lr: 1e-4
 lr_decay: true
 lr_min: 0.0
 weight_decay: 1e-4
@@ -35,7 +36,7 @@ K: 20
 
 create_pct_traj_and_exit: false
 
-entropy_reg: 0.0
+entropy_reg: false
 
 priority_sampling: false
 priority_weights: 5.0
