@@ -479,23 +479,24 @@ class QDTTrainer(Trainer):
                 attention_mask.reshape(-1) > 0
             ]
             action_loss = F.mse_loss(action_preds_, action_target_)
-        if self.actor.stochastic_policy:
+        if not self.actor.stochastic_policy:
             state_preds = state_preds[:, :-1]
             state_target = states[:, 1:]
             states_loss = ((state_preds - state_target) ** 2)[
                 attention_mask[:, :-1] > 0
             ].mean()
-            if reward_preds is not None:
-                reward_preds = reward_preds.reshape(-1, 1)[attention_mask.reshape(-1) > 0]
-                reward_target = (
-                    rewards.reshape(-1, 1)[attention_mask.reshape(-1) > 0] / self.scale
-                )
-                rewards_loss = F.mse_loss(reward_preds, reward_target)
+            rewards_loss = torch.zeros(1).to(action_loss.device)
+            # if reward_preds is not None:
+            #     reward_preds = reward_preds.reshape(-1, 1)[attention_mask.reshape(-1) > 0]
+            #     reward_target = (
+            #         rewards.reshape(-1, 1)[attention_mask.reshape(-1) > 0] / self.scale
+            #     )
+            #     rewards_loss = F.mse_loss(reward_preds, reward_target)
         else:
-            rewards_loss = 0
-            states_loss = 0
+            rewards_loss = torch.zeros(1).to(action_loss.device)
+            states_loss = torch.zeros(1).to(action_loss.device)
 
-        if self.actor.stochastic_policy:
+        if not self.actor.stochastic_policy:
             bc_loss = action_loss + states_loss + rewards_loss
         else:
             bc_loss = self.eta1 * action_loss + states_loss + rewards_loss
