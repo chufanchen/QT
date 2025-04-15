@@ -78,9 +78,10 @@ class QDTTrainer(Trainer):
         self.actor_optimizer = torch.optim.Adam(
             self.actor.parameters(), lr=lr, weight_decay=weight_decay
         )
-        self.temperature_optimizer = torch.optim.Adam(
-            [self.actor.log_temperature], lr=temperature_lr, betas=[0.9, 0.999]
-        )
+        if entropy_reg:
+            self.temperature_optimizer = torch.optim.Adam(
+                [self.actor.log_temperature], lr=temperature_lr, betas=[0.9, 0.999]
+            )
 
         self.step_start_ema = step_start_ema
         self.ema = EMA(ema_decay)
@@ -509,7 +510,7 @@ class QDTTrainer(Trainer):
             q_loss = -q1_new_action.mean() / q2_new_action.abs().mean().detach()
         else:
             q_loss = -q2_new_action.mean() / q1_new_action.abs().mean().detach()
-        if self.step < self.pretrain_steps:
+        if self.step < self.pretrain_steps and self.actor.stochastic_policy:
             actor_loss = action_loss
         else:
             actor_loss = self.eta2 * bc_loss + self.eta * q_loss
