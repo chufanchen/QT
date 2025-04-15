@@ -581,7 +581,7 @@ def experiment(cfg: DictConfig):
             prior = GaussianBCModel(
                 state_dim=state_dim,
                 act_dim=act_dim,
-                hidden_size=cfg.agent_params.embed_dim,
+                hidden_size=cfg.agent_params.prior_embed_dim,
                 n_layer=cfg.agent_params.n_layer,
             )
             load_model(cfg.agent_params.behavior_ckpt_file, prior)
