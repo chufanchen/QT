@@ -217,19 +217,19 @@ class QDTTrainer(Trainer):
             values = np.array(values)
             logs[f"training/{name}_mean"] = np.mean(values)
             logs[f"training/{name}_std"] = np.std(values)
-            logs[f"training/{name}_min"] = np.min(values)
-            logs[f"training/{name}_max"] = np.max(values)
-            # Add percentiles
-            logs[f"training/{name}_p25"] = np.percentile(values, 25)
-            logs[f"training/{name}_p50"] = np.percentile(values, 50)
-            logs[f"training/{name}_p75"] = np.percentile(values, 75)
-            logs[f"training/{name}_p95"] = np.percentile(values, 95)
+            # logs[f"training/{name}_min"] = np.min(values)
+            # logs[f"training/{name}_max"] = np.max(values)
+            # # Add percentiles
+            # logs[f"training/{name}_p25"] = np.percentile(values, 25)
+            # logs[f"training/{name}_p50"] = np.percentile(values, 50)
+            # logs[f"training/{name}_p75"] = np.percentile(values, 75)
+            # logs[f"training/{name}_p95"] = np.percentile(values, 95)
             
-            # Add histogram bins (10 bins)
-            hist, bin_edges = np.histogram(values, bins=10)
-            for i, (count, edge) in enumerate(zip(hist, bin_edges[:-1])):
-                logs[f"training/{name}_hist_bin_{i}"] = count
-                logs[f"training/{name}_hist_edge_{i}"] = edge
+            # # Add histogram bins (10 bins)
+            # hist, bin_edges = np.histogram(values, bins=10)
+            # for i, (count, edge) in enumerate(zip(hist, bin_edges[:-1])):
+            #     logs[f"training/{name}_hist_bin_{i}"] = count
+            #     logs[f"training/{name}_hist_edge_{i}"] = edge
         
         compute_detailed_stats(action_loss, "action_loss")
         compute_detailed_stats(states_loss, "states_loss")
