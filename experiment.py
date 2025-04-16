@@ -575,6 +575,8 @@ def experiment(cfg: DictConfig):
     else:
         raise NotImplementedError
 
+    if cfg.run_params.resume_training:
+        load_model(cfg.run_params.resume_path, model)
     model = model.to(device=device)
     prior = None
     if model_type == "qdt":

@@ -41,3 +41,6 @@ entropy_reg: false
 
 priority_sampling: false
 priority_weights: 5.0
+
+resume_training: false
+resume_path: null
