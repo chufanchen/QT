@@ -537,7 +537,7 @@ class QDTTrainer(Trainer):
                     masked_action_dist = SquashedNormal(masked_action_loc, masked_action_std)
                     kl_estimation = torch.distributions.kl.kl_divergence(masked_action_dist, prior_dist_detached).mean()
                 else:
-                    kl_estimation = F.mse_loss(action_preds_filtered, prior_dist_detached.loc)
+                    kl_estimation = F.mse_loss(action_preds_filtered.reshape(-1, action_dim)[attention_mask_filtered.reshape(-1) > 0], prior_dist_detached.loc)
                 # kl_mse = F.mse_loss(prior_dist_detached.loc, masked_action_dist.loc)
                 if self.step >= self.pretrain_steps:
                     actor_loss += self.alpha * 0.0002 * kl_estimation
