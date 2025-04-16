@@ -91,7 +91,10 @@ def experiment(cfg: DictConfig):
 
     if env_name == "hopper":
         dversion = 2
-        gym_name = f"{env_name}-{dataset}-v{dversion}"
+        if dataset == "mixed":
+            gym_name = f"{env_name}-medium-v{dversion}"
+        else:
+            gym_name = f"{env_name}-{dataset}-v{dversion}"
         env = gym.make(gym_name)
         max_ep_len = 1000
         env_targets = [3600, 1800]  # evaluation conditioning targets
@@ -108,7 +111,10 @@ def experiment(cfg: DictConfig):
         scale = 1000.0
     elif env_name == "walker2d":
         dversion = 2
-        gym_name = f"{env_name}-{dataset}-v{dversion}"
+        if dataset == "mixed":
+            gym_name = f"{env_name}-medium-v{dversion}"
+        else:
+            gym_name = f"{env_name}-{dataset}-v{dversion}"
         env = gym.make(gym_name)
         max_ep_len = 1000
         env_targets = [5000, 4000, 2500]
@@ -371,7 +377,7 @@ def experiment(cfg: DictConfig):
         ]
         for i in range(batch_size):
             traj = trajectories[int(sorted_inds[batch_inds[i]])]
-            # if "hopper-medium-expert" in gym_name:
+            # if "hopper-medium" in gym_name:
             #     si = random.randint(0, traj["rewards"].shape[0] - K - 1)
             # else:
             si = random.randint(0, traj["rewards"].shape[0] - 1)

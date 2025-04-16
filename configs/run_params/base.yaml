@@ -6,7 +6,7 @@ num_eval_episodes: 10
 max_iters: 500
 num_steps_per_iter: 1000
 early_stop: true
-early_epoch: 100
+early_epoch: 200
 
 discount: 0.99
 use_discount: true
