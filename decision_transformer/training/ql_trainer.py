@@ -518,26 +518,27 @@ class QDTTrainer(Trainer):
             kl_estimation = torch.zeros((1))
             kl_mse = torch.zeros((1))
             states_filtered = states[traj_pct_mask]
-            if states_filtered.shape[0] > 0: 
+            if states_filtered.shape[0] > 0:
                 attention_mask_filtered = attention_mask[traj_pct_mask]
                 _, prior_dist, _ = self.prior.forward(states_filtered, _, _, attention_mask=attention_mask_filtered)
                 prior_dist_detached = SquashedNormal(prior_dist.loc.detach(), prior_dist.std.detach())
                 _, action_preds_filtered, _ = self.actor.forward(
-                    states_filtered,
-                    actions[traj_pct_mask],
-                    rewards[traj_pct_mask],
-                    action_target[traj_pct_mask],
-                    rtg[:, :-1][traj_pct_mask],
-                    timesteps[traj_pct_mask],
-                    attention_mask=attention_mask_filtered,
-                )
-                
-                masked_action_loc = action_preds_filtered.loc.reshape(-1, action_dim)[attention_mask_filtered.reshape(-1) > 0]
-                masked_action_std = action_preds_filtered.std.reshape(-1, action_dim)[attention_mask_filtered.reshape(-1) > 0]
-                masked_action_dist = SquashedNormal(masked_action_loc, masked_action_std)
-                
-                kl_estimation = torch.distributions.kl.kl_divergence(masked_action_dist, prior_dist_detached).mean()
-                kl_mse = F.mse_loss(prior_dist_detached.loc, masked_action_dist.loc)
+                        states_filtered,
+                        actions[traj_pct_mask],
+                        rewards[traj_pct_mask],
+                        action_target[traj_pct_mask],
+                        rtg[:, :-1][traj_pct_mask],
+                        timesteps[traj_pct_mask],
+                        attention_mask=attention_mask_filtered,
+                    )
+                if self.actor.stochastic_policy:
+                    masked_action_loc = action_preds_filtered.loc.reshape(-1, action_dim)[attention_mask_filtered.reshape(-1) > 0]
+                    masked_action_std = action_preds_filtered.std.reshape(-1, action_dim)[attention_mask_filtered.reshape(-1) > 0]
+                    masked_action_dist = SquashedNormal(masked_action_loc, masked_action_std)
+                    kl_estimation = torch.distributions.kl.kl_divergence(masked_action_dist, prior_dist_detached).mean()
+                else:
+                    kl_estimation = F.mse_loss(action_preds_filtered, prior_dist_detached.loc)
+                # kl_mse = F.mse_loss(prior_dist_detached.loc, masked_action_dist.loc)
                 if self.step >= self.pretrain_steps:
                     actor_loss += self.alpha * 0.0002 * kl_estimation
 
