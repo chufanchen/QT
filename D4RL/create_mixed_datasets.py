@@ -64,11 +64,38 @@ if __name__ == "__main__":
         "halfcheetah-medium-v2.pkl"
     ]
     
+    # datasets = [
+    #     "hopper-medium-expert-v2.pkl",
+    #     "hopper-medium-replay-v2.pkl",
+    #     "hopper-medium-v2.pkl"
+    # ]
+    
+    # datasets = [
+    #     "walker2d-medium-expert-v2.pkl",
+    #     "walker2d-medium-replay-v2.pkl",
+    #     "walker2d-medium-v2.pkl"
+    # ]
+    
     # Create with equal mixing ratios
     create_mixed_dataset(
         dataset_paths=datasets,
         output_path="halfcheetah-mixed-v2.pkl"
     )
+    
+    # create_mixed_dataset(
+    #     dataset_paths=datasets,
+    #     output_path="hopper-mixed-v2.pkl"
+    # )
+    
+    # create_mixed_dataset(
+    #     dataset_paths=datasets,
+    #     output_path="hopper-mixed-v2.pkl"
+    # )
+    
+    # create_mixed_dataset(
+    #     dataset_paths=datasets,
+    #     output_path="walker2d-mixed-v2.pkl"
+    # )
     
     # Or with custom mixing ratios (e.g., 0.4, 0.3, 0.3)
     # create_mixed_dataset(

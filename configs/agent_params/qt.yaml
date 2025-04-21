@@ -1,5 +1,5 @@
 model_type: qdt
-n_layer: 3
+n_layer: 4
 embed_dim: 256
 n_head: 4
 activation_function: relu

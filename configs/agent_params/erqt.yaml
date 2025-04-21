@@ -1,5 +1,6 @@
 model_type: qdt
-n_layer: 3
+prior_n_layer: 3
+n_layer: 4
 prior_embed_dim: 128
 embed_dim: 256
 n_head: 4

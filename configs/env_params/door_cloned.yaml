@@ -1,12 +1,12 @@
-env: halfcheetah
-dataset: medium
+env: door
+dataset: cloned
 use_aug: false
 pct_traj: 1.0
 dataset_postfix: null
 
 mode: normal
-grad_norm: 15.0
+grad_norm: 9.0
 env_targets:
-  - 12000
-  - 9000
-  - 6000
+  - 2000
+  - 1000
+  - 500
