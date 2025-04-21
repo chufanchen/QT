@@ -13,6 +13,7 @@ import torch
 from omegaconf import DictConfig, OmegaConf
 from tqdm import tqdm, trange
 from torch.utils.tensorboard import SummaryWriter
+import uuid
 
 import wandb
 from decision_transformer.evaluation.evaluate_episodes import (
@@ -29,6 +30,7 @@ from decision_transformer.training.ql_trainer import QDTTrainer
 from decision_transformer.training.seq_trainer import SequenceTrainer
 
 os.environ["D4RL_SUPPRESS_IMPORT_ERROR"] = "1"
+os.environ["WANDB_MODE"] = "offline"
 
 def save_checkpoint(state, name):
     filename = name
@@ -80,8 +82,7 @@ def experiment(cfg: DictConfig):
     model_type = cfg.agent_params.model_type
     seed = cfg.seed
     group_name = f"{cfg.exp_name}-{env_name}-{dataset}"
-    timestr = time.strftime("%y%m%d-%H%M%S")
-    exp_prefix = f"{group_name}-{seed}-{timestr}"
+    exp_prefix = f"{group_name}-{seed}-{int(time.time())}-{uuid.uuid4().hex[:6]}"
 
     if not os.path.exists(os.path.join(cfg.save_path, exp_prefix)):
         pathlib.Path(cfg.save_path + exp_prefix).mkdir(parents=True, exist_ok=True)
@@ -737,6 +738,8 @@ def experiment(cfg: DictConfig):
         print(
             f"Current best return mean is {best_ret}, normalized score is {best_nor_ret * 100}, Iteration {best_iter}"
         )
+        with open(os.path.join(cfg.save_path, exp_prefix, 'log.txt'), 'a') as f:
+            f.write(f"Current best return mean is {best_ret}, normalized score is {best_nor_ret * 100}, Iteration {best_iter}\n")
 
         if cfg.run_params.early_stop and iter >= cfg.run_params.early_epoch:
             break
@@ -758,6 +761,9 @@ def experiment(cfg: DictConfig):
 
     print(f"The final best return mean is {best_ret}")
     print(f"The final best normalized return is {best_nor_ret * 100}")
+    result_path = os.path.join(cfg.save_path, exp_prefix, 'result.json')
+    with open(result_path, 'w') as f:
+        json.dump(final_metrics, f, indent=4)
     return best_nor_ret
 
 
