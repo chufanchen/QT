@@ -758,6 +758,9 @@ def experiment(cfg: DictConfig):
 
     print(f"The final best return mean is {best_ret}")
     print(f"The final best normalized return is {best_nor_ret * 100}")
+    result_path = os.path.join(cfg.save_path, exp_prefix, 'result.json')
+    with open(result_path, 'w') as f:
+        json.dump(final_metrics, f, indent=4)
     return best_nor_ret
 
 
