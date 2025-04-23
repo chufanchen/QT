@@ -82,20 +82,12 @@ def save_paths(sampled_paths, save_path):
 
     npify(data)
 
-    # Save both formats
-    base_path, ext = os.path.splitext(save_path)
-
-    # Save as pickle
-    with open(save_path, "wb") as f:
-        pickle.dump(sampled_paths, f)
-
     # Save as HDF5
-    hdf5_path = base_path + ".hdf5"
+    hdf5_path = save_path
     with h5py.File(hdf5_path, "w") as dataset:
         for k in data:
             dataset.create_dataset(k, data=data[k], compression="gzip")
 
-    print(f"Saved data in pickle format to: {save_path}")
     print(f"Saved data in HDF5 format to: {hdf5_path}")
 
 
@@ -236,7 +228,10 @@ def experiment(cfg: DictConfig):
             dversion = 0
         else:
             dversion = 1
-        gym_name = f"{env_name}-{dataset}-v{dversion}"
+        if "mixed" in dataset:
+            gym_name = f"{env_name}-{dataset.split('-')[0]}-v{dversion}"
+        else:
+            gym_name = f"{env_name}-{dataset}-v{dversion}"
         env = gym.make(gym_name)
         max_ep_len = 1000
         env_targets = [300, 200, 150, 100, 50, 20]
@@ -276,10 +271,17 @@ def experiment(cfg: DictConfig):
     pct_traj = cfg.env_params.pct_traj
     # load dataset
     dataset_path = f"D4RL/{env_name}-{dataset}-v{dversion}.pkl"
+    if "mixed" in dataset: # e.g. medium-mixed-v2
+        dataset_path = f"D4RL/{env_name}-{dataset}.pkl"
     if cfg.env_params.use_aug:
-        dataset_path = (
-            f"D4RL/{env_name}-{dataset}-v{dversion}_augmented_{int(100*pct_traj)}%.pkl"
-        )
+        if "mixed" in dataset:
+            dataset_path = (
+                f"D4RL/{env_name}-{dataset}_augmented_{int(100*pct_traj)}%.pkl"
+            )
+        else:
+            dataset_path = (
+                f"D4RL/{env_name}-{dataset}-v{dversion}_augmented_{int(100*pct_traj)}%.pkl"
+            )
     elif cfg.env_params.dataset_postfix is not None:
         dataset_path = f"D4RL/{env_name}-{dataset}-v{dversion}_{cfg.env_params.dataset_postfix}.pkl"
     with open(dataset_path, "rb") as f:
@@ -525,7 +527,7 @@ def experiment(cfg: DictConfig):
             pickle.dump(sampled_paths, f)
 
         print(f"Saved sampled trajectories to: {save_path}")
-        save_paths(sampled_paths, save_path.replace(".pkl", ".h5"))
+        save_paths(sampled_paths, save_path.replace(".pkl", ".hdf5"))
         sys.exit(0)
 
     # only train on top pct_traj trajectories (for %BC experiment)
