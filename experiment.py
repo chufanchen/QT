@@ -4,6 +4,7 @@ import pickle
 import random
 import sys
 import time
+import h5py
 
 import d4rl
 import gym
@@ -20,6 +21,7 @@ from decision_transformer.evaluation.evaluate_episodes import (
     evaluate_episode,
     evaluate_episode_rtg,
     evaluate_episode_rtg_v1,
+    sample_episode_rtg,
 )
 from decision_transformer.models.decision_transformer import DecisionTransformer
 from decision_transformer.models.mlp_bc import GaussianBCModel, MLPBCModel
@@ -30,7 +32,72 @@ from decision_transformer.training.ql_trainer import QDTTrainer
 from decision_transformer.training.seq_trainer import SequenceTrainer
 
 os.environ["D4RL_SUPPRESS_IMPORT_ERROR"] = "1"
-os.environ["WANDB_MODE"] = "offline"
+# os.environ["WANDB_MODE"] = "offline"
+
+
+def npify(data):
+    for k in data:
+        if k == "terminals":
+            dtype = np.bool_
+        else:
+            dtype = np.float32
+        data[k] = np.array(data[k], dtype=dtype)
+
+
+def append_data(data, s, a, tgt, done, qpos, qvel):
+    data["observations"].append(s)
+    data["actions"].append(a)
+    data["rewards"].append(0.0)
+    data["terminals"].append(done)
+    data["infos/goal"].append(tgt)
+    data["infos/qpos"].append(qpos)
+    data["infos/qvel"].append(qvel)
+
+
+def reset_data():
+    return {
+        "observations": [],
+        "actions": [],
+        "terminals": [],
+        "rewards": [],
+        "infos/goal": [],
+        "infos/qpos": [],
+        "infos/qvel": [],
+    }
+
+
+def save_paths(sampled_paths, save_path):
+    # Convert to D4RL format
+    data = reset_data()
+
+    for path in sampled_paths:
+        for t in range(len(path)):
+            s = path["observations"][t]
+            a = path["actions"][t]
+            done = path["terminals"][t]
+            tgt = path["infos/goal"][t]
+            qpos = path["infos/qpos"][t]
+            qvel = path["infos/qvel"][t]
+            append_data(data, s, a, tgt, done, qpos, qvel)
+
+    npify(data)
+
+    # Save both formats
+    base_path, ext = os.path.splitext(save_path)
+
+    # Save as pickle
+    with open(save_path, "wb") as f:
+        pickle.dump(sampled_paths, f)
+
+    # Save as HDF5
+    hdf5_path = base_path + ".hdf5"
+    with h5py.File(hdf5_path, "w") as dataset:
+        for k in data:
+            dataset.create_dataset(k, data=data[k], compression="gzip")
+
+    print(f"Saved data in pickle format to: {save_path}")
+    print(f"Saved data in HDF5 format to: {hdf5_path}")
+
 
 def save_checkpoint(state, name):
     filename = name
@@ -88,7 +155,7 @@ def experiment(cfg: DictConfig):
         pathlib.Path(cfg.save_path + exp_prefix).mkdir(parents=True, exist_ok=True)
 
     # Initialize TensorBoard writer
-    tb_writer = SummaryWriter(os.path.join(cfg.save_path, exp_prefix, 'tensorboard'))
+    tb_writer = SummaryWriter(os.path.join(cfg.save_path, exp_prefix, "tensorboard"))
 
     if env_name == "hopper":
         dversion = 2
@@ -338,6 +405,128 @@ def experiment(cfg: DictConfig):
 
         # Exit without training
         sys.exit(0)
+    elif cfg.run_params.sample_traj_and_exit:
+        print("=" * 50)
+        print(f"Sampling trajectories from {env_name} {dataset}")
+        print("=" * 50)
+        maze = env.str_maze_spec
+        if model_type == "qdt":
+            model = QDecisionTransformer(
+                state_dim=state_dim,
+                act_dim=act_dim,
+                max_length=K,
+                max_ep_len=max_ep_len,
+                hidden_size=cfg.agent_params.embed_dim,
+                n_layer=cfg.agent_params.n_layer,
+                n_head=cfg.agent_params.n_head,
+                n_inner=4 * cfg.agent_params.embed_dim,
+                activation_function=cfg.agent_params.activation_function,
+                n_positions=1024,
+                resid_pdrop=cfg.agent_params.dropout,
+                attn_pdrop=cfg.agent_params.dropout,
+                scale=scale,
+                sar=cfg.run_params.sar,
+                rtg_no_q=cfg.run_params.rtg_no_q,
+                infer_no_q=cfg.run_params.infer_no_q,
+                stochastic_policy=cfg.agent_params.stochastic_policy,
+                target_entropy=-act_dim,
+            )
+            critic = Critic(state_dim, act_dim, hidden_dim=cfg.agent_params.embed_dim)
+            if cfg.run_params.sample_policy is not None:
+                load_model(cfg.run_params.sample_policy, model, critic)
+            model = model.to(device=device)
+            critic = critic.to(device=device)
+        else:
+            raise NotImplementedError
+
+        sampled_paths = []
+        max_episode_steps = env._max_episode_steps
+        from d4rl.pointmaze import maze_model
+
+        env = maze_model.MazeEnv(maze)
+        env.set_target()
+        for _ in trange(cfg.run_params.num_trajectories, desc="Sampling trajectories"):
+            observations = []
+            actions = []
+            rewards = []
+            terminals = []
+            goals = []
+            qpos = []
+            qvel = []
+            episode_return = 0
+            episode_length = 0
+
+            if cfg.run_params.sample_policy is not None:
+                # Use trained policy
+                observations, actions, rewards, terminals, goals, qpos, qvel = (
+                    sample_episode_rtg(
+                        env,
+                        state_dim,
+                        act_dim,
+                        model,
+                        critic,
+                        max_ep_len=max_episode_steps,
+                        scale=cfg.run_params.test_scale,
+                        state_mean=state_mean,
+                        state_std=state_std,
+                        device=device,
+                        target_return=[env_targets[0] / cfg.run_params.test_scale],
+                        mode=mode,
+                    )
+                )
+                env.set_target()
+            else:
+                obs = env.reset()
+                done = False
+                # Use random policy
+                while not done:
+                    action = env.action_space.sample()
+                    action = np.clip(
+                        action, env.action_space.low, env.action_space.high
+                    )
+                    if episode_length >= max_episode_steps:
+                        done = True
+                    observations.append(obs)
+                    actions.append(action)
+                    rewards.append(0.0)
+                    terminals.append(done)
+                    goals.append(env._target)
+                    qpos.append(env.unwrapped.sim.data.qpos.ravel().copy())
+                    qvel.append(env.unwrapped.sim.data.qvel.ravel().copy())
+
+                    next_obs, reward, _, _ = env.step(action)
+
+                    obs = next_obs
+                    episode_return += reward
+                    episode_length += 1
+
+                    if done:
+                        env.set_target()
+
+            # Create trajectory dictionary
+            traj_data = {
+                "observations": np.array(observations),
+                "actions": np.array(actions),
+                "rewards": np.array(rewards),
+                "terminals": np.array(terminals),
+                "infos/goal": np.array(goals),
+                "infos/qpos": np.array(qpos),
+                "infos/qvel": np.array(qvel),
+            }
+            sampled_paths.append(traj_data)
+
+        # Save trajectories
+        save_path = (
+            cfg.run_params.save_path
+            if cfg.run_params.save_path
+            else f"D4RL/{env_name}-{dataset}-v{dversion}_sampled.pkl"
+        )
+        with open(save_path, "wb") as f:
+            pickle.dump(sampled_paths, f)
+
+        print(f"Saved sampled trajectories to: {save_path}")
+        save_paths(sampled_paths, save_path.replace(".pkl", ".h5"))
+        sys.exit(0)
 
     # only train on top pct_traj trajectories (for %BC experiment)
     num_timesteps = max(int(pct_traj * num_timesteps), 1)
@@ -349,11 +538,13 @@ def experiment(cfg: DictConfig):
         timesteps += traj_lens[sorted_inds[ind]]
         num_trajectories += 1
         ind -= 1
-    if not cfg.env_params.use_aug: 
-        sorted_inds = sorted_inds[-num_trajectories:] # for %BC we only train on top pct_traj trajectories
+    if not cfg.env_params.use_aug:
+        sorted_inds = sorted_inds[
+            -num_trajectories:
+        ]  # for %BC we only train on top pct_traj trajectories
         # used to reweight sampling so we sample according to timesteps instead of trajectories
         p_sample = traj_lens[sorted_inds] / sum(traj_lens[sorted_inds])
-    else: # for erqt we train on all trajectories
+    else:  # for erqt we train on all trajectories
         num_trajectories = len(trajectories)
         if cfg.run_params.priority_sampling:
             # reweight sampling so we prioritize top trajectories
@@ -362,8 +553,6 @@ def experiment(cfg: DictConfig):
             p_sample = weights[sorted_inds] / sum(weights[sorted_inds])
         else:
             p_sample = traj_lens[sorted_inds] / sum(traj_lens[sorted_inds])
-    
-    
 
     def get_batch(batch_size=256, max_len=K):
         batch_inds = np.random.choice(
@@ -684,10 +873,11 @@ def experiment(cfg: DictConfig):
         config_dict = OmegaConf.to_container(cfg, resolve=True, throw_on_missing=True)
         config_dict["env_params"]["max_ep_len"] = max_ep_len
         import json
-        config_path = os.path.join(cfg.save_path, exp_prefix, 'config.json')
-        with open(config_path, 'w') as f:
+
+        config_path = os.path.join(cfg.save_path, exp_prefix, "config.json")
+        with open(config_path, "w") as f:
             json.dump(config_dict, f, indent=4)
-        
+
         wandb.tensorboard.patch(root_logdir=os.path.join(cfg.save_path, exp_prefix))
         wandb.init(
             settings=wandb.Settings(code_dir="."),
@@ -698,7 +888,6 @@ def experiment(cfg: DictConfig):
             config=config_dict,
         )
         wandb.watch(model)
-        
 
     best_ret = -10000
     best_nor_ret = -1000
@@ -738,8 +927,10 @@ def experiment(cfg: DictConfig):
         print(
             f"Current best return mean is {best_ret}, normalized score is {best_nor_ret * 100}, Iteration {best_iter}"
         )
-        with open(os.path.join(cfg.save_path, exp_prefix, 'log.txt'), 'a') as f:
-            f.write(f"Current best return mean is {best_ret}, normalized score is {best_nor_ret * 100}, Iteration {best_iter}\n")
+        with open(os.path.join(cfg.save_path, exp_prefix, "log.txt"), "a") as f:
+            f.write(
+                f"Current best return mean is {best_ret}, normalized score is {best_nor_ret * 100}, Iteration {best_iter}\n"
+            )
 
         if cfg.run_params.early_stop and iter >= cfg.run_params.early_epoch:
             break
@@ -761,8 +952,8 @@ def experiment(cfg: DictConfig):
 
     print(f"The final best return mean is {best_ret}")
     print(f"The final best normalized return is {best_nor_ret * 100}")
-    result_path = os.path.join(cfg.save_path, exp_prefix, 'result.json')
-    with open(result_path, 'w') as f:
+    result_path = os.path.join(cfg.save_path, exp_prefix, "result.json")
+    with open(result_path, "w") as f:
         json.dump(final_metrics, f, indent=4)
     return best_nor_ret
 

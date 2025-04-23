@@ -31,6 +31,11 @@ lambda1: 1.0
 lambda2: 1.0
 
 
-K: 5
+K: 20
 
 create_pct_traj_and_exit: true
+sample_traj_and_exit: false
+# Trajectory sampling parameters
+num_trajectories: 1000 
+save_path: null 
+sample_policy: null # random policy if null or path to policy checkpoint

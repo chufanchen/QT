@@ -1,12 +1,11 @@
 batch_size: 256
 
-pretrain_steps: 1000
 warmup_steps: 10000
 num_eval_episodes: 10
-max_iters: 500
-num_steps_per_iter: 1000
-early_stop: false
-early_epoch: 200
+max_iters: 150
+num_steps_per_iter: 10000
+early_stop: true
+early_epoch: 100
 
 discount: 0.99
 use_discount: true
@@ -20,7 +19,6 @@ infer_no_q: false
 max_q_backup: false
 
 learning_rate: 3e-4
-temperature_lr: 1e-4
 lr_decay: true
 lr_min: 0.0
 weight_decay: 1e-4
@@ -28,26 +26,17 @@ weight_decay: 1e-4
 tau: 0.005
 alpha: 0.01
 eta: 1.0
-# eta1: 0.000005 
-eta1: 0.0001
-# eta1: 0.02
-eta2: 1.0
+eta2: 0.4
 lambda1: 1.0
 lambda2: 1.0
+
 
 K: 20
 
 create_pct_traj_and_exit: false
-sample_traj_and_exit: false
+sample_traj_and_exit: true
 
-num_trajectories: 1000 
+# Trajectory sampling parameters
+num_trajectories: 2000 
 save_path: null 
 sample_policy: null # random policy if null or path to policy checkpoint
-
-entropy_reg: false
-
-priority_sampling: false
-priority_weights: 5.0
-
-resume_training: false
-resume_path: null
