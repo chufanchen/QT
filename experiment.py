@@ -271,17 +271,10 @@ def experiment(cfg: DictConfig):
     pct_traj = cfg.env_params.pct_traj
     # load dataset
     dataset_path = f"D4RL/{env_name}-{dataset}-v{dversion}.pkl"
-    if "mixed" in dataset: # e.g. medium-mixed-v2
-        dataset_path = f"D4RL/{env_name}-{dataset}.pkl"
     if cfg.env_params.use_aug:
-        if "mixed" in dataset:
-            dataset_path = (
-                f"D4RL/{env_name}-{dataset}_augmented_{int(100*pct_traj)}%.pkl"
-            )
-        else:
-            dataset_path = (
-                f"D4RL/{env_name}-{dataset}-v{dversion}_augmented_{int(100*pct_traj)}%.pkl"
-            )
+        dataset_path = (
+            f"D4RL/{env_name}-{dataset}-v{dversion}_augmented_{int(100*pct_traj)}%.pkl"
+        )
     elif cfg.env_params.dataset_postfix is not None:
         dataset_path = f"D4RL/{env_name}-{dataset}-v{dversion}_{cfg.env_params.dataset_postfix}.pkl"
     with open(dataset_path, "rb") as f:

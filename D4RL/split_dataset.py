@@ -3,7 +3,7 @@ import gym
 import numpy as np
 import pickle
 
-def split_dataset_by_return(env_name='maze2d-medium-v1', expert_threshold=0.3, medium_threshold=0.3):
+def split_dataset_by_return(env_name='maze2d-umaze-v1', expert_threshold=0.3, medium_threshold=0.3):
     """
     Split a D4RL dataset into expert, medium-expert, and random based on returns
     Args:
@@ -86,14 +86,17 @@ def split_dataset_by_return(env_name='maze2d-medium-v1', expert_threshold=0.3, m
         if not trajectories:
             return None
         
-        combined = {
-            'observations': np.concatenate([t['observations'] for t in trajectories]),
-            'actions': np.concatenate([t['actions'] for t in trajectories]),
-            'rewards': np.concatenate([t['rewards'] for t in trajectories]),
-            'terminals': np.concatenate([t['terminals'] for t in trajectories]),
-            'timeouts': np.concatenate([t['timeouts'] for t in trajectories])
-        }
-        return combined
+        # Instead of concatenating, just return the list of trajectory dictionaries
+        paths = []
+        for traj in trajectories:
+            paths.append({
+                'observations': traj['observations'],
+                'actions': traj['actions'],
+                'rewards': traj['rewards'],
+                'terminals': traj['terminals'],
+                'timeouts': traj['timeouts']
+            })
+        return paths
     
     expert_dataset = combine_trajectories(expert_data)
     medium_dataset = combine_trajectories(medium_data)
