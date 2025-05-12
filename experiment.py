@@ -863,16 +863,14 @@ def experiment(cfg: DictConfig):
                 ),
                 eval_fns=[eval_episodes(tar) for tar in env_targets],
             )
-
+    import json 
+    config_dict = OmegaConf.to_container(cfg, resolve=True, throw_on_missing=True)
+    config_dict["env_params"]["max_ep_len"] = max_ep_len
+    config_path = os.path.join(cfg.save_path, exp_prefix, "config.json")
+    with open(config_path, "w") as f:
+        json.dump(config_dict, f, indent=4)
+        
     if log_to_wandb:
-        config_dict = OmegaConf.to_container(cfg, resolve=True, throw_on_missing=True)
-        config_dict["env_params"]["max_ep_len"] = max_ep_len
-        import json
-
-        config_path = os.path.join(cfg.save_path, exp_prefix, "config.json")
-        with open(config_path, "w") as f:
-            json.dump(config_dict, f, indent=4)
-
         wandb.tensorboard.patch(root_logdir=os.path.join(cfg.save_path, exp_prefix))
         wandb.init(
             settings=wandb.Settings(code_dir="."),
